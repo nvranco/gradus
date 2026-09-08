@@ -24,7 +24,7 @@ _PROCESS_START = time.perf_counter()
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -2393,15 +2393,22 @@ def panel_page(token: str, w: str | None = None, db: Session = Depends(get_db)):
 _game_panel_cache: dict[str, tuple[float, dict]] = {}
 
 
-def _game_panel_payload(week, db: Session) -> dict:
+def _game_panel_payload(week, db: Session, corte: str = "total") -> dict:
     from metrics import game_queries
 
-    key = week.isoformat()
+    # La clave lleva el corte: el desglose cambia el payload, y sin esto pasar
+    # de «por universidad» a «por aparato» devolvía el gráfico anterior durante
+    # dos minutos.
+    key = f"{week.isoformat()}:{corte}"
     hit = _game_panel_cache.get(key)
     if hit and time.time() - hit[0] < _PANEL_TTL_SECONDS:
         return hit[1]
-    payload = game_queries.build(db, week)
-    _game_panel_cache.clear()
+    payload = game_queries.build(db, week, corte=corte)
+    # Se guardan los últimos cuatro y no uno solo: los cuatro cortes son links
+    # de la misma barra y se recorren de a uno, así que con una sola ranura cada
+    # click volvía a recorrer todas las tablas.
+    while len(_game_panel_cache) >= 4:
+        _game_panel_cache.pop(next(iter(_game_panel_cache)))
     _game_panel_cache[key] = (time.time(), payload)
     return payload
 
@@ -2429,30 +2436,48 @@ def _game_panel_week(w: str | None):
     return clamp_week(week_of_today())
 
 
-@app.get("/panel/{token}/derivemos", response_class=HTMLResponse, include_in_schema=False)
-def game_panel_page(token: str, w: str | None = None, db: Session = Depends(get_db)):
+@app.get("/panel/{token}/dx", response_class=HTMLResponse, include_in_schema=False)
+def game_panel_page(token: str, w: str | None = None, s: str = "titulares",
+                    corte: str = "total", db: Session = Depends(get_db)):
     from metrics.game_render import page as game_page
 
     _require_panel_token(token)
     week = _game_panel_week(w)
     return HTMLResponse(
-        game_page(_game_panel_payload(week, db), token=token),
+        game_page(_game_panel_payload(week, db, corte), token=token, seccion=s),
         headers=_PANEL_HEADERS,
     )
 
 
-@app.get("/panel/{token}/derivemos/data.json", include_in_schema=False)
-def game_panel_data(token: str, w: str | None = None, db: Session = Depends(get_db)):
+@app.get("/panel/{token}/dx/data.json", include_in_schema=False)
+def game_panel_data(token: str, w: str | None = None, corte: str = "total",
+                    db: Session = Depends(get_db)):
     from fastapi.responses import JSONResponse
 
     _require_panel_token(token)
-    payload = _game_panel_payload(_game_panel_week(w), db)
+    payload = _game_panel_payload(_game_panel_week(w), db, corte)
     # `default=str` porque varios bloques llevan `date`/`datetime` adentro (la
     # semana de cada fila, el inicio de cada empuje). Serializarlos a ISO es más
     # útil que aplanarlos en las consultas: el JSON existe para poder hacer
     # cuentas afuera, y ahí una fecha en texto ISO se vuelve a parsear sola.
     return JSONResponse(
         json.loads(json.dumps(payload, default=str)), headers=_PANEL_HEADERS)
+
+
+@app.get("/panel/{token}/derivemos{resto:path}", include_in_schema=False)
+def game_panel_legacy(token: str, resto: str = "", w: str | None = None):
+    """La ruta vieja del panel del juego, que ahora vive en `/dx`.
+
+    Existe por una razón práctica: el link lleva un token de 32 caracteres y no
+    se retipea, así que un 404 en el bookmark viejo obliga a ir a buscarlo a
+    Railway. Se puede borrar cuando ese bookmark ya no le importe a nadie.
+
+    Valida el token igual que el panel: una ruta que redirige sin mirar diría
+    que el panel existe, que es justo lo que `_require_panel_token` evita.
+    """
+    _require_panel_token(token)
+    destino = f"/panel/{token}/dx{resto}"
+    return RedirectResponse(destino + (f"?w={w}" if w else ""), status_code=308)
 
 
 @app.get("/panel/{token}/data.json", include_in_schema=False)

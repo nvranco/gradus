@@ -16,6 +16,9 @@ un caso de uso común que no existe.
 """
 from __future__ import annotations
 
+import base64
+from pathlib import Path
+
 from . import charts as ch
 from .charts import esc, num
 
@@ -50,20 +53,55 @@ a:hover{text-decoration:underline}
    superficie #1a1a2a. Todo lo demás del panel vive adentro de una de estas. */
 .box{border:1px solid var(--border);background:var(--card);border-radius:8px;padding:18px 20px}
 
-/* Cabecera: 1fr + 400px, el mismo reparto que el header del juego (marca a la
-   izquierda, identidad a la derecha). Debajo de 900px se apila. */
-header.top{display:grid;gap:12px;grid-template-columns:minmax(0,1fr) 400px}
-header.top .box{padding:10px 16px;display:flex;align-items:center;
-  justify-content:space-between;gap:12px}
-.brand{font-weight:700;font-size:17px;letter-spacing:-.02em}
-.brand span{color:var(--muted);font-weight:500}
+/* Cabecera: una sola caja de ancho completo, con la marca a la izquierda y el
+   selector de semana a la derecha. Eran dos —la de al lado tenía los totales y
+   el link al otro panel—, pero un contador que ya está en cada sección y un
+   link que ahora vive en la marca no justificaban partir la fila. */
+header.top{display:block}
+/* 55 px es el alto EXACTO de la cabecera de /derivadas, medido sobre la página
+   en producción: ahí lo fijan los botones de la barra, que acá no están. Sin
+   esto la caja se encoge al alto de la marca y el logo —que es el mismo dibujo
+   y el mismo cuerpo de letra— se lee más chico por vivir en una caja más baja. */
+header.top .box{min-height:55px;padding:10px 16px;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;flex-wrap:wrap}
+/* La marca de Intervalo tal como está en la cabecera de /derivadas: la palabra
+   con su subrayado de cuatro tramos (web/src/app/derivadas/game-logo.tsx). Las
+   proporciones son las de allá y por eso van en `em` —separación 0,16 y barra
+   0,12 del cuerpo de letra—: así el dibujo es el mismo a cualquier tamaño.
+   El cuerpo de letra es el mismo de allá (17 px) y la fuente también: es lo
+   único que el panel trae de afuera (ver FUENTE_MARCA). Los cuatro colores
+   están resueltos en web/src/app/derivadas/icon.tsx. */
+.brand{display:inline-flex;flex-direction:column;align-items:stretch;gap:.16em;
+  font-family:'Noto Serif',Georgia,'Times New Roman',Times,serif;font-weight:600;
+  font-size:17px;line-height:1;color:var(--fg);text-decoration:none}
+.brand:hover{text-decoration:none}
+.brand .bar{display:flex;height:.12em;border-radius:2px;overflow:hidden}
+.brand .bar i{flex:1}
 .weeknav{display:flex;gap:6px;align-items:center;font-size:13px;flex-wrap:wrap}
 .weeknav a,.weeknav .cur{padding:3px 9px;border-radius:6px;border:1px solid var(--border)}
 .weeknav .cur{background:var(--indigo);color:#fff;border-color:var(--indigo);font-weight:600}
+/* Barra de secciones: índice en el panel de Intervalo, pestañas en el del juego.
+   El activo se PINTA, no se despoja: comparte caja con los links —mismo alto,
+   mismo borde, mismo redondeo— y solo cambia de relleno. Sin la caja, el
+   seleccionado se leía como texto suelto entre dos botones, que es lo contrario
+   de lo que tiene que comunicar. Es el mismo trato que la semana en curso. */
 nav.jump{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
-nav.jump a{color:var(--muted);border:1px solid var(--border);border-radius:6px;
-  padding:3px 9px;background:var(--card)}
+nav.jump a,nav.jump .cur{border:1px solid var(--border);border-radius:6px;
+  padding:3px 9px}
+nav.jump a{color:var(--muted);background:var(--card)}
 nav.jump a:hover{color:var(--fg);text-decoration:none;border-color:var(--indigo)}
+nav.jump .cur{background:var(--indigo);color:#fff;border-color:var(--indigo);
+  font-weight:600}
+/* La barra de cortes de un gráfico: los mismos chips que tenía el índice de
+   secciones, que ya no existe. Un control del panel se ve igual viva donde
+   viva, y el activo se marca como la semana en curso del selector de arriba. */
+.cortes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;
+  margin:0 0 12px}
+.cortes .sub{margin:0 4px 0 0}
+.cortes a,.cortes .cur{border-radius:6px;padding:3px 9px;border:1px solid var(--border)}
+.cortes a{color:var(--muted);background:var(--card)}
+.cortes a:hover{color:var(--fg);text-decoration:none;border-color:var(--indigo)}
+.cortes .cur{background:var(--indigo);color:#fff;border-color:var(--indigo);font-weight:600}
 
 h2{font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
   font-weight:700;margin:26px 0 10px;display:flex;gap:10px;align-items:baseline}
@@ -121,12 +159,11 @@ td.dim{color:var(--muted)}
 footer{color:var(--muted);font-size:12px;margin-top:28px;padding-top:16px;
   border-top:1px solid var(--border)}
 footer b{color:var(--fg)}
-@media (max-width:900px){header.top{grid-template-columns:1fr}}
 @media print{body{background:#fff;color:#111}}
 """
 
 
-def delta_chip(d, suffix: str = "") -> str:
+def delta_chip(d, suffix: str = "", dec: int = 1) -> str:
     if d is None:
         return '<span class="chip flat">sin base</span>'
     cls = "up" if d > 0 else ("down" if d < 0 else "flat")
@@ -134,17 +171,18 @@ def delta_chip(d, suffix: str = "") -> str:
     # La diferencia entre dos porcentajes son puntos porcentuales: "-2,2%" sobre
     # un 7,1% se lee como una caída del 2% cuando cayó de 9,3 a 7,1.
     unit = " pp" if suffix == "%" else suffix
-    return f'<span class="chip {cls}">{sign}{num(d, unit)}</span>'
+    return f'<span class="chip {cls}">{sign}{num(d, unit, dec)}</span>'
 
 
 def kpi(c: dict) -> str:
     sfx = c["suffix"]
+    dec = c.get("dec", 1)
     return (
         f'<div class="box kpi">'
         f'<div class="label">{esc(c["label"])}</div>'
-        f'<div class="row"><div class="val">{num(c["value"], sfx)}</div>'
+        f'<div class="row"><div class="val">{num(c["value"], sfx, dec)}</div>'
         f'{ch.spark(c["series"])}</div>'
-        f'<div class="row" style="margin-top:8px">{delta_chip(c["delta"], sfx)}'
+        f'<div class="row" style="margin-top:8px">{delta_chip(c["delta"], sfx, dec)}'
         f'<span class="hint">vs. semana anterior</span></div>'
         f'<div class="hint">{esc(c["hint"])}</div></div>')
 
@@ -171,3 +209,45 @@ def section(n: int, title: str, body: str, sub: str = "", anchor: str = "") -> s
     a = f' id="{esc(anchor)}"' if anchor else ""
     s = f'<p class="sub">{sub}</p>' if sub else ""
     return f'<section{a}><h2><b>{n}</b>{esc(title)}</h2>{s}{body}</section>'
+# Los cuatro tramos del subrayado de la marca, en orden. Resueltos en
+# web/src/app/derivadas/icon.tsx: el front los calcula con `mixWithLegendBg`
+# sobre los colores de cinturón, así que este es el resultado y no la fórmula —
+# si allá cambian, hay que venir a copiarlos de nuevo.
+BELT_BAR = ("#e8e8ea", "#2a62c4", "#8d31b7", "#7e451f")
+
+
+# ── Identidad de la pestaña ────────────────────────────────────────────────
+
+# El favicon es EL ARCHIVO de producción, no una versión dibujada acá: es el PNG
+# de 96 px que sirve /derivadas/icon (web/src/app/derivadas/icon.tsx, que lo
+# rasteriza con Satori). Se bajó de la app y se guardó al lado de este módulo.
+#
+# El primer intento fue redibujarlo en SVG con las mismas medidas, y no alcanzó:
+# la serifa del sistema no es la Noto Serif, el subrayado cae distinto y en la
+# barra de pestañas los dos íconos se veían como dos marcas parecidas en vez de
+# la misma. A 16 px no hay margen para "casi".
+#
+# Va embebido como data URI y no como archivo servido porque el panel se sirve
+# desde FastAPI, que no tiene rutas de estáticos: una ruta nueva para dos kilos
+# sería más código que el ícono.
+#
+# Si el ícono de la app cambia, este queda viejo. Se actualiza bajándolo de
+# nuevo: la URL sale del `<link rel="icon">` de https://www.intervalo.xyz/derivadas.
+FAVICON_PNG = Path(__file__).with_name("favicon-dx.png")
+
+FAVICON_LINK = (
+    "<link rel='icon' type='image/png' sizes='96x96' href='data:image/png;base64,"
+    + base64.b64encode(FAVICON_PNG.read_bytes()).decode("ascii")
+    + "'>"
+)
+
+# La Noto Serif de la app, solo para la marca de la cabecera. Es la única cosa
+# que el panel pide afuera, y es a propósito: con la serifa del sistema el
+# wordmark del panel y el del juego se leían como dos logos distintos, que es
+# justo lo que compartir la piel quería evitar. Si la fuente no carga, la pila
+# de abajo la reemplaza y el dibujo sigue en pie.
+FUENTE_MARCA = (
+    "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+    "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?"
+    "family=Noto+Serif:wght@600&display=swap'>"
+)
