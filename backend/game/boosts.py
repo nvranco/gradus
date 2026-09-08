@@ -95,6 +95,11 @@ FUENTE_MAIL = "mp:"
 # log, que es lo que permite repararlo después con grant_game_boost.py.
 VENTANA_MISMO_PAGO_S = 180
 
+# El `source` de los empujes por aforo. Está escrito acá y no importado de
+# game/aforo.py porque aforo importa boosts: traerlo al revés cierra el ciclo.
+# El check verifica que los dos digan lo mismo.
+_SOURCE_AFORO = "aforo"
+
 
 def horas_de(cafecitos: int) -> int:
     """Cuánto dura el empuje de UNA donación.
@@ -125,6 +130,11 @@ class BoostView:
     cafecitos: int
     donor_name: str | None
     expires_in_seconds: int
+    # Parte de este multiplicador la puso el aforo del día (game/aforo.py) y no
+    # una donación. El cartel lo necesita para no decir "5 cafecitos" de un
+    # empuje que nadie pagó: `cafecitos` cuenta SOLO los donados, así que sin
+    # esta bandera un empuje de aforo puro se anunciaría como cero cafecitos.
+    aforo: bool = False
 
 
 def multiplier_from_cafecitos(cafecitos: int) -> float:
@@ -327,7 +337,8 @@ def active_boosts(db: Session, now: datetime | None = None) -> list[BoostView]:
     for row in rows:
         agg = by_uni.setdefault(
             row.university,
-            {"cafecitos": 0, "topeados": 0, "donor_name": None, "expires_at": row.expires_at},
+            {"cafecitos": 0, "topeados": 0, "donor_name": None,
+             "aforo": False, "expires_at": row.expires_at},
         )
         # DOS sumas, y la diferencia entre las dos es el bug que esto arregla.
         #
@@ -338,7 +349,15 @@ def active_boosts(db: Session, now: datetime | None = None) -> list[BoostView]:
         # de 30 anunciaba ×3,0 mientras la respuesta pagaba ×2,0 — y el feed, que
         # sale de `multiplier_for`, decía ×2,0 al mismo tiempo que el chip decía
         # ×3,0.
-        agg["cafecitos"] += row.cafecitos
+        # `cafecitos` cuenta lo DONADO y `topeados` lo que empuja el
+        # multiplicador. El empuje por aforo entra en el segundo y no en el
+        # primero: vale ×0,5 igual que cinco cafecitos, pero nadie los invitó y
+        # el cartel no puede decir que sí.
+        es_aforo = row.source == _SOURCE_AFORO
+        if es_aforo:
+            agg["aforo"] = True
+        else:
+            agg["cafecitos"] += row.cafecitos
         agg["topeados"] += min(row.cafecitos, MAX_CAFECITOS_PER_DONATION)
         if row.donor_name:
             agg["donor_name"] = row.donor_name
@@ -351,6 +370,7 @@ def active_boosts(db: Session, now: datetime | None = None) -> list[BoostView]:
             multiplier=multiplier_from_cafecitos(agg["topeados"]),
             cafecitos=agg["cafecitos"],
             donor_name=agg["donor_name"],
+            aforo=agg["aforo"],
             expires_in_seconds=max(0, int((agg["expires_at"] - now).total_seconds())),
         )
         for uni, agg in by_uni.items()
@@ -371,8 +391,14 @@ def grant(
     external_ref: str | None = None,
     minutes: int | None = None,
     now: datetime | None = None,
+    anunciar: bool = True,
 ) -> GameBoost | None:
     """Registra un empuje. Devuelve None si `external_ref` ya se usó.
+
+    `anunciar=False` inserta la fila y mueve el pulso, pero no emite el evento
+    de "invitó cafecitos" al feed. Lo usa el empuje por aforo (game/aforo.py),
+    que no lo invitó nadie y tiene su propia frase: sin esta salida el feed
+    anunciaría una donación de cinco cafecitos que no existe.
 
     La sigla se canonicaliza acá y no en el que llama: el empuje tiene que
     matchear `game_players.university` exactamente, y esa columna guarda lo que
@@ -420,13 +446,14 @@ def grant(
     # multiplicador del evento de acá abajo saldría en ×1 y el cartel anunciaría
     # una donación que no cambió nada.
     olvidar_cache_de_empujes()
-    events.on_boost(
-        db,
-        university=uni,
-        cafecitos=cafecitos,
-        multiplier=multiplier_for(db, uni, now=now),
-        donor_name=donor_name,
-    )
+    if anunciar:
+        events.on_boost(
+            db,
+            university=uni,
+            cafecitos=cafecitos,
+            multiplier=multiplier_for(db, uni, now=now),
+            donor_name=donor_name,
+        )
     # El ranking va a moverse distinto a partir de ahora: que el pulso avise.
     simulation.bump_version(db)
     return boost

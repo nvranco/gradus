@@ -1489,7 +1489,7 @@ export interface components {
          * BoostTramo
          * @description Un empuje de cafecito vigente, ya agregado. `university=None` = global.
          *
-         *     Proyección fiel de `game.boosts.BoostView`: los mismos cinco campos con los
+         *     Proyección fiel de `game.boosts.BoostView`: los mismos campos con los
          *     mismos significados. Lo usan dos pantallas distintas —la tile de Practicar,
          *     que muestra los tramos que le tocan a UNA persona, y el cartel del ranking,
          *     que muestra los de TODAS las universidades— porque en las dos el objeto es
@@ -1506,6 +1506,11 @@ export interface components {
             donor_name: string | null;
             /** Expires In Seconds */
             expires_in_seconds: number;
+            /**
+             * Aforo
+             * @default false
+             */
+            aforo: boolean;
         };
         /** CapPreviewResponse */
         CapPreviewResponse: {

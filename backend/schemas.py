@@ -73,7 +73,7 @@ class StreakInfo(BaseModel):
 class BoostTramo(BaseModel):
     """Un empuje de cafecito vigente, ya agregado. `university=None` = global.
 
-    Proyección fiel de `game.boosts.BoostView`: los mismos cinco campos con los
+    Proyección fiel de `game.boosts.BoostView`: los mismos campos con los
     mismos significados. Lo usan dos pantallas distintas —la tile de Practicar,
     que muestra los tramos que le tocan a UNA persona, y el cartel del ranking,
     que muestra los de TODAS las universidades— porque en las dos el objeto es
@@ -91,6 +91,11 @@ class BoostTramo(BaseModel):
     cafecitos: int
     donor_name: str | None
     expires_in_seconds: int
+    # Parte del multiplicador la puso el aforo del día y no una donación (ver
+    # game/aforo.py). Va aparte de `cafecitos` —que cuenta solo lo donado— para
+    # que el cartel pueda decir la verdad en los tres casos: solo donaciones,
+    # solo aforo, o las dos cosas sumadas.
+    aforo: bool = False
 
 
 class BoostInfo(BaseModel):

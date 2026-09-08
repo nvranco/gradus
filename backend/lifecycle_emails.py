@@ -684,10 +684,20 @@ def due_cafecito_efecto_emails(db: DBSession) -> list[tuple[User, dict]]:
     """
     from models import GameBoost, GameBoostIntent, GamePlayer
 
+    from game.aforo import SOURCE as AFORO
+
     ahora = datetime.utcnow()
+    # Los de aforo quedan fuera de raíz: no los donó nadie, así que no hay a
+    # quién agradecerle. Sin este filtro dependeríamos de que no haya ninguna
+    # intención consumida en la ventana de ±5 s del empuje automático — y si la
+    # hubiera, el mail le agradecería a quien no fue.
     vencidos = (
         db.query(GameBoost)
-        .filter(GameBoost.expires_at <= ahora, GameBoost.email_sent_at.is_(None))
+        .filter(
+            GameBoost.expires_at <= ahora,
+            GameBoost.email_sent_at.is_(None),
+            GameBoost.source != AFORO,
+        )
         .all()
     )
 

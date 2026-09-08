@@ -675,6 +675,17 @@ def enroll_user(
         # correspondía, y acá `existing` era falso solo por la carrera.
         return {"success": True, "message": "Enrollment successful"}
 
+    # ¿Fue la persona número 10 de su universidad hoy? Solo en un alta NUEVA:
+    # un re-enrollment no trae a nadie. Va después del commit para que el alta
+    # ya esté contada por `personas_nuevas_hoy` —si no, la décima persona se
+    # cuenta a sí misma como novena y el empuje se corre a la siguiente— y para
+    # que un problema acá no pueda tirar abajo el alta, que ya está guardada.
+    if not existing:
+        from game import aforo as game_aforo
+
+        if game_aforo.revisar(db, university) is not None:
+            db.commit()
+
     # Solo en una alta nueva: persistir el resultado del ejercicio de prueba del
     # onboarding sobre el primer ítem del curso (acierto → mañana, fuera de la 1ª
     # sesión; fallo → hoy, dentro). En re-enrollment no se toca el progreso.
@@ -1861,6 +1872,7 @@ def get_leaderboard_summary(
                 cafecitos=b.cafecitos,
                 donor_name=b.donor_name,
                 expires_in_seconds=b.expires_in_seconds,
+                aforo=b.aforo,
             )
             for b in game_boosts.active_boosts(db)
         ],

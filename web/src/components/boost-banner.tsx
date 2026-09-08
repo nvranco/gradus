@@ -32,6 +32,27 @@ export type EmpujeVigente = {
   cafecitos: number
   donor_name?: string | null
   expires_in_seconds: number
+  /** Parte del multiplicador la puso el aforo del día y no una donación
+   *  (backend game/aforo.py). `cafecitos` cuenta SOLO los donados, así que un
+   *  empuje de aforo puro llega con cafecitos=0 y esta bandera en true. */
+  aforo?: boolean
+}
+
+/** Qué dice el globito del chip. Son tres casos y no dos, desde que el empuje
+ *  puede venir del aforo del día: solo donaciones, solo aforo, o las dos
+ *  sumadas. Decir "0 cafecito(s)" en el caso del medio sería peor que no decir
+ *  nada, porque el multiplicador está ahí a la vista. */
+function tituloDe(boost: EmpujeVigente): string {
+  const invitados = boost.cafecitos > 0
+    ? boost.donor_name
+      ? `${boost.donor_name} invitó ${boost.cafecitos} cafecito(s)`
+      : `${boost.cafecitos} cafecito(s)`
+    : null
+  // Sin el número: el umbral vive en el backend (aforo.UMBRAL_PERSONAS) y
+  // espejarlo acá es la misma trampa en la que ya cayeron las constantes del
+  // cafecito. El feed sí lo dice, porque lo escribe el server con el conteo real.
+  const porAforo = boost.aforo ? "las personas que entraron hoy" : null
+  return [invitados, porAforo].filter(Boolean).join(" + ") || "Empuje vigente"
 }
 
 // Para el chip propio, aclarado hasta que se lee como oro sobre el fondo.
@@ -169,11 +190,7 @@ export function BoostChip({
         // diferencia entre ×2 y ×3 era solo un poco más de relleno.
         boxShadow: `0 0 ${6 + 10 * fuerza}px color-mix(in oklab, ${AMBAR} ${13 * fuerza}%, transparent)`,
       } as React.CSSProperties}
-      title={
-        boost.donor_name
-          ? `${boost.donor_name} invitó ${boost.cafecitos} cafecito(s)`
-          : `${boost.cafecitos} cafecito(s)`
-      }
+      title={tituloDe(boost)}
     >
       {/* Sin sigla es el empuje GLOBAL: la donación que no se pudo atribuir a
           ninguna universidad y termina cobrándola todo el mundo. */}
