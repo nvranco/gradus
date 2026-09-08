@@ -3655,6 +3655,11 @@
           "expires_in_seconds": {
             "type": "integer",
             "title": "Expires In Seconds"
+          },
+          "aforo": {
+            "type": "boolean",
+            "title": "Aforo",
+            "default": false
           }
         },
         "type": "object",
@@ -3666,7 +3671,7 @@
           "expires_in_seconds"
         ],
         "title": "BoostTramo",
-        "description": "Un empuje de cafecito vigente, ya agregado. `university=None` = global.\n\nProyecci\u00f3n fiel de `game.boosts.BoostView`: los mismos cinco campos con los\nmismos significados. Lo usan dos pantallas distintas \u2014la tile de Practicar,\nque muestra los tramos que le tocan a UNA persona, y el cartel del ranking,\nque muestra los de TODAS las universidades\u2014 porque en las dos el objeto es\nel mismo: un cafecito vigente."
+        "description": "Un empuje de cafecito vigente, ya agregado. `university=None` = global.\n\nProyecci\u00f3n fiel de `game.boosts.BoostView`: los mismos campos con los\nmismos significados. Lo usan dos pantallas distintas \u2014la tile de Practicar,\nque muestra los tramos que le tocan a UNA persona, y el cartel del ranking,\nque muestra los de TODAS las universidades\u2014 porque en las dos el objeto es\nel mismo: un cafecito vigente."
       },
       "CapPreviewResponse": {
         "properties": {

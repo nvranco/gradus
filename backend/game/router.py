@@ -377,6 +377,10 @@ def patch_me(
     authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
+    # Se declara acá y no dentro del `if body.university`: este PATCH también se
+    # usa para cambiar el @ o la carrera sola, y en esos casos la variable no
+    # existiría cuando la miramos después del commit.
+    reviso_aforo = False
     if body.alias is not None:
         is_guest = player.user_id is None
         # La ÚNICA edición gratis: un invitado que todavía no tocó su @
@@ -445,6 +449,11 @@ def patch_me(
         if not primera_carga and nueva != player.university:
             player.university_set_at = datetime.utcnow()
         player.university = nueva
+        # Solo la primera carga cuenta para el aforo del día: mudarse no es
+        # entrar. `aforo.personas_nuevas_hoy` igual filtra por fecha de alta del
+        # jugador, así que esto no decide quién cuenta —eso lo decide la
+        # consulta— sino cuándo vale la pena preguntar.
+        reviso_aforo = primera_carga and nueva is not None
     if body.career is not None:
         # Solo se persisten los códigos conocidos; "Otra" (o basura) queda NULL,
         # el mismo bucket que usa el leaderboard principal.
@@ -456,6 +465,14 @@ def patch_me(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Ese @ ya está tomado.")
+    # Después del commit, por lo mismo que en el alta de clásico (main.py): la
+    # persona tiene que estar contada antes de preguntar si fue la décima, y un
+    # problema del premio no puede voltear el PATCH que ya se guardó.
+    if reviso_aforo:
+        from . import aforo
+
+        if aforo.revisar(db, player.university) is not None:
+            db.commit()
     db.refresh(player)
     return _player_out(db, player)
 
@@ -1250,6 +1267,7 @@ def game_pulse(
                 cafecitos=b.cafecitos,
                 donor_name=b.donor_name,
                 expires_in_seconds=b.expires_in_seconds,
+                aforo=b.aforo,
             )
             for b in boosts.active_boosts(db)
         ],

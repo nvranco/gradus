@@ -48,6 +48,7 @@ SCRIPTS = Path(__file__).resolve().parent
 # NO incluye nada que lea la base real (ver `diag/`) ni nada que escriba.
 CHECKS = [
     "check_adaptive_session_size",
+    "check_aforo",
     "check_avisos_de_evento",
     "check_cafecito_email",
     "check_cafecito_stream",

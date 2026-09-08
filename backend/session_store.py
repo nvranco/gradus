@@ -1906,6 +1906,7 @@ def get_user_progress_db(user_id: int, course_id: int, db: DBSession) -> dict:
                     "cafecitos": t.cafecitos,
                     "donor_name": t.donor_name,
                     "expires_in_seconds": t.expires_in_seconds,
+                    "aforo": t.aforo,
                 }
                 for t in tramos
             ],

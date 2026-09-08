@@ -66,6 +66,34 @@ se junta».
 universidad impulsada después de que arrancó el empuje no lo cobra. Sin él, cada
 empuje se llenaría de gente que se muda por un día.
 
+### Empuje por aforo: 10 personas nuevas en un día (`game/aforo.py`)
+
+El segundo modo de encender un empuje, y el único que no cuesta plata. Cuando
+entra la **persona número 10** de una universidad en el mismo día, esa
+universidad se lleva **×1,5 durante 2 horas**, en el acto y sin que nadie done.
+
+**Qué cuenta como una persona nueva**: la suma de los dos productos —un alta de
+Intervalo clásico que se inscribe en esa universidad, y un jugador nuevo del
+minijuego que carga la suya—. Se cuentan **personas y no filas**: quien juega de
+invitado y después se registra el mismo día deja dos filas y es una sola
+persona, y la identidad ya está unificada por `game_players.user_id`.
+
+**Una sola vez por universidad y por día**, con el día en huso argentino. No hay
+columna de estado ni candado: `external_ref` vale `aforo:<sigla>:<día>` y es
+UNIQUE, así que la persona 11, dos altas simultáneas y el reintento de un POST
+rebotan todos contra el mismo índice.
+
+**Vive en la misma tabla que el cafecito** (`game_boosts`, `source="aforo"`) y
+por lo tanto **suma** con él: una universidad con una donación de 3 y el aforo
+del día está en ×1,8. Lo que NO hace es hacerse pasar por una donación — el
+cartel cuenta en `cafecitos` solo lo que se donó de verdad y marca el aforo con
+su propia bandera, el feed tiene su propia frase, y el mail de agradecimiento
+del vencimiento lo saltea porque no hay a quién agradecerle.
+
+**Por qué dura 2 h y no 24**: el de aforo se junta esa misma tarde y tiene que
+gastarse esa misma tarde. Con la duración del pago le comería el lugar, que es
+lo que financia el proyecto.
+
 ### Cómo se reparte el extra
 
 `Answer.xp_base` es antes de los multiplicadores y `Answer.xp_earned` después. La

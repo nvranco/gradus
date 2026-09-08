@@ -252,6 +252,31 @@ def on_signup(db: Session, player: GamePlayer) -> None:
     )
 
 
+def on_aforo(
+    db: Session,
+    university: str,
+    personas: int,
+    multiplier: float,
+    horas: int,
+) -> None:
+    """Una universidad llegó al aforo del día y se ganó el empuje.
+
+    Sin `actor_alias`: no lo hizo nadie en particular, lo hicieron diez. La
+    frase nombra a la universidad y no a una persona, que es exactamente la
+    diferencia con `on_boost` — ahí hay alguien que puso plata y merece que se
+    lo vea.
+    """
+    art = article_for(university).capitalize()
+    mult = f"×{multiplier:.1f}".replace(".", ",")
+    reloj = "una hora" if horas == 1 else f"{horas} horas"
+    emit(
+        db,
+        "boost",
+        f"{art} {{u0}} llegó a {personas} personas nuevas hoy: {mult} por {reloj}. 🎉",
+        university=university,
+    )
+
+
 def on_boost(
     db: Session,
     university: str | None,
