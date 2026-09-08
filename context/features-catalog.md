@@ -42,6 +42,32 @@ Edición de nombre/username, configuración de notificaciones (hora local en pas
 
 Intake de curso/carrera/universidad/motivación (los datos de universidad son los que alimentan directamente el ranking universitario y la segmentación de notificaciones), secuencia animada de colores de belt, termina en `onboarding/complete` con prompt de instalación PWA.
 
+## Minijuego de derivadas (`derivadas/`, backend `game/`)
+
+Producto aparte, con identidad y economía propias pero la misma tabla de
+cafecitos. Lo único documentado acá es **cómo elige qué ejercicio servir**, que
+es la mecánica que gobierna la experiencia entera:
+
+- **Elo online, no niveles fijos.** Cada jugador tiene un θ y cada plantilla una
+  β; el motor sirve lo que cae en la banda p̂ ∈ [0.70, 0.80], o sea lo que
+  estima que va a acertar 3 de cada 4 veces. El θ se muestra en escala de
+  ajedrez (`rating = 1000 + 200·θ`) porque 1166 se lee y 0.83 no.
+- **Rampa de arranque.** Los tres primeros ejercicios son fijos (x, x², 2x²) y
+  hasta la quinta respuesta el tier disponible crece de a uno, para que el juego
+  no abra con una exponencial por cómo haya caído el Elo.
+- **La β se ancla a la semilla de su tier** (`elo.effective_beta`), pesada en
+  PERSONAS distintas y no en respuestas. Sin ese ancla un motor adaptativo se
+  autoengaña: lo difícil solo se le sirve a quien va bien, así que lo difícil
+  solo recibe evidencia de quien va bien y termina pareciendo fácil.
+- **Piso de Elo por plantilla** (`templates.PISO_TRIGONOMETRICAS`, hoy 1200).
+  Es el único criterio de la lista que NO es adaptativo, y por eso existe: el
+  ancla frena que una β se desboque pero no la revierte, y las trigonométricas
+  se habían desplomado hasta servirse desde 760 de rating. Un piso dice «esto
+  no antes de acá» aunque el motor crea lo contrario; pasada la barrera vuelven
+  a competir por la banda como cualquier otra. El panel de la tecla `p` muestra
+  el piso como Elo de desbloqueo de la fila, así que la promesa de la pantalla y
+  lo que el generador hace son el mismo número.
+
 ## Misceláneo
 
 - Splash animado con colores de belt al cargar (`splash-context.tsx`/`splash-gate.tsx`).

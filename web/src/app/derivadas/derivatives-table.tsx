@@ -240,7 +240,9 @@ function RenglonStats({ fila, datos }: { fila: Fila; datos?: GameStatsRow }) {
   // manda un slug que el front no conoce— es el mismo placeholder que "no hay
   // plantilla": no hay nada más honesto que decir. `unlock_elo` no se
   // muestra en esta tabla, pero sigue siendo la señal de "esta fila tiene
-  // plantilla de verdad" — es null solo en las tres que el juego nunca pide.
+  // plantilla de verdad". Hoy el server lo manda en las catorce: 1/x, √x y
+  // tan x dejaron de ser null cuando ROW_TEMPLATES se puso al día con las
+  // plantillas que ya existían (game/stats.py).
   const noExiste = datos === undefined || datos.unlock_elo === null
   const hayVelocidad = !noExiste && datos!.avg_response_ms != null
   const hayEfectividad = !noExiste && datos!.accuracy != null

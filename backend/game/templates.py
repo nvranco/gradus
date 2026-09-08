@@ -40,6 +40,23 @@ class Generated:
     prompt_latex: str | None = None
 
 
+# Piso de Elo para las plantillas con seno, coseno o tangente: por debajo de
+# este rating el generador no las sirve, y a partir de acá vuelven a jugar con
+# la banda objetivo como cualquier otra.
+#
+# El motivo por el que esto es un PISO y no una semilla más alta: la β de las
+# trigonométricas se desplomó sola. En producción (2026-09-08) `t3_sin` tiene
+# β = −3.05 con 12 personas, o sea POR DEBAJO de la semilla de T1, y el
+# encogimiento de `elo.effective_beta` solo la levanta hasta −1.99. Subir
+# BETA_SEED no alcanza: con 12 personas la semilla pesa 8/20, así que ni
+# poniéndola en +1.0 la β creída pasa de −1.4 y el seno se sigue sirviendo
+# temprano. El resultado medido es que el 100% de las veces que se sirvió
+# `t3_sin` fue por debajo de 1200, con un promedio de 968 y un mínimo de 760.
+#
+# Un solo número, y sacarlo es borrar el campo de las 8 plantillas de abajo.
+PISO_TRIGONOMETRICAS = 1200
+
+
 @dataclass(frozen=True)
 class GameTemplate:
     key: str
@@ -47,6 +64,12 @@ class GameTemplate:
     build: Callable[[CyclingRandom], Generated]
     # Feedback cuando el error no matchea ninguno predecible.
     generic_feedback: str = GENERIC_FEEDBACK
+    # Rating mínimo del jugador para que el generador pueda servirla. `None` es
+    # sin piso, que es el caso de casi todas: el tier y la banda objetivo ya
+    # ordenan la dificultad. El piso existe para lo que hay que retrasar por
+    # criterio pedagógico y no porque el motor lo crea difícil — ver
+    # PISO_TRIGONOMETRICAS.
+    min_rating: int | None = None
 
 
 # ── Errores predecibles compartidos ──────────────────────────────────────────
@@ -378,18 +401,18 @@ TEMPLATES: tuple[GameTemplate, ...] = (
     GameTemplate("t2_pow_plus_const", 2, _t2_pow_plus_const),
     GameTemplate("t3_exp", 3, _t3_exp),
     GameTemplate("t3_ln", 3, _t3_ln),
-    GameTemplate("t3_sin", 3, _t3_sin),
-    GameTemplate("t3_cos", 3, _t3_cos),
+    GameTemplate("t3_sin", 3, _t3_sin, min_rating=PISO_TRIGONOMETRICAS),
+    GameTemplate("t3_cos", 3, _t3_cos, min_rating=PISO_TRIGONOMETRICAS),
     GameTemplate("t3_ax", 3, _t3_ax),
     GameTemplate("t3_loga", 3, _t3_loga),
-    GameTemplate("t3_trig_sum", 3, _t3_trig_sum),
+    GameTemplate("t3_trig_sum", 3, _t3_trig_sum, min_rating=PISO_TRIGONOMETRICAS),
     GameTemplate("t3_mix_sum", 3, _t3_mix_sum),
-    GameTemplate("t4_pow_sin", 4, _t4_pow_sin, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$."),
+    GameTemplate("t4_pow_sin", 4, _t4_pow_sin, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$.", min_rating=PISO_TRIGONOMETRICAS),
     GameTemplate("t4_pow_exp", 4, _t4_pow_exp, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$."),
-    GameTemplate("t4_exp_cos", 4, _t4_exp_cos, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$."),
+    GameTemplate("t4_exp_cos", 4, _t4_exp_cos, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$.", min_rating=PISO_TRIGONOMETRICAS),
     GameTemplate("t4_pow_ln", 4, _t4_pow_ln, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$."),
-    GameTemplate("t4_exp_sin", 4, _t4_exp_sin, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$."),
-    GameTemplate("t5_sin_over_x", 5, _t5_sin_over_x, "Revisá la regla del cociente."),
+    GameTemplate("t4_exp_sin", 4, _t4_exp_sin, "Revisá la regla del producto: $\\left(u \\cdot v\\right)' = u'v + uv'$.", min_rating=PISO_TRIGONOMETRICAS),
+    GameTemplate("t5_sin_over_x", 5, _t5_sin_over_x, "Revisá la regla del cociente.", min_rating=PISO_TRIGONOMETRICAS),
     GameTemplate("t5_pow_over_linear", 5, _t5_pow_over_linear, "Revisá la regla del cociente."),
     GameTemplate("t5_exp_over_pow", 5, _t5_exp_over_pow, "Revisá la regla del cociente."),
     GameTemplate("t5_ln_over_x", 5, _t5_ln_over_x, "Revisá la regla del cociente."),
@@ -399,7 +422,7 @@ TEMPLATES: tuple[GameTemplate, ...] = (
     # corrido ese índice sin que el check avisara por qué empezó a fallar.
     GameTemplate("t1_recip", 1, _t1_recip),
     GameTemplate("t1_sqrt", 1, _t1_sqrt),
-    GameTemplate("t3_tan", 3, _t3_tan),
+    GameTemplate("t3_tan", 3, _t3_tan, min_rating=PISO_TRIGONOMETRICAS),
 )
 
 TEMPLATE_BY_KEY: dict[str, GameTemplate] = {t.key: t for t in TEMPLATES}

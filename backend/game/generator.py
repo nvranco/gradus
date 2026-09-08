@@ -108,6 +108,22 @@ def _recent_template_keys(db: Session, player: GamePlayer) -> set[str]:
     return {key for (key,) in rows}
 
 
+def desbloqueadas(player: GamePlayer) -> list[GameTemplate]:
+    """Las plantillas que este jugador tiene permitido recibir hoy.
+
+    El piso se compara contra el rating y no contra θ porque es la unidad en la
+    que está escrito el criterio y la que ve el jugador en el panel: «hasta
+    1200 no hay trigonométricas» se lee igual en el código que en la pantalla.
+
+    Se mide contra el rating DE AHORA y no contra el máximo histórico, así que
+    alguien parado justo en la línea puede verlas aparecer y desaparecer. Es a
+    propósito mientras el piso sea uno solo: guardar el máximo alcanzado es una
+    columna nueva, y la diferencia solo la nota quien orbita el umbral.
+    """
+    rating = elo.rating_of(player.theta)
+    return [t for t in TEMPLATES if t.min_rating is None or rating >= t.min_rating]
+
+
 def pick_template(
     db: Session,
     player: GamePlayer,
@@ -120,13 +136,19 @@ def pick_template(
     rng = rng or random.Random()
     recent = _recent_template_keys(db, player)
 
-    candidates = [t for t in TEMPLATES if t.key not in recent]
+    # `permitidas` y no TEMPLATES en TODAS las ramas de acá abajo, fallbacks
+    # incluidos: cada uno de esos `if not ...` está para no quedarse sin nada
+    # que servir, y si alguno vuelve a la lista completa el piso se evapora
+    # justo en el caso raro. Nunca queda vacía —T0 no tiene piso—.
+    permitidas = desbloqueadas(player)
+
+    candidates = [t for t in permitidas if t.key not in recent]
     if player.n_updates < elo.RAMP_UPDATES:
         ramped = [t for t in candidates if t.tier <= player.n_updates]
         # La exclusión de recientes puede vaciar un tier chico (T0 tiene 2
         # plantillas): en la rampa la variedad importa menos que el orden.
         if not ramped:
-            ramped = [t for t in TEMPLATES if t.tier <= player.n_updates]
+            ramped = [t for t in permitidas if t.tier <= player.n_updates]
         candidates = ramped
     if max_tier is not None:
         easier = [t for t in candidates if t.tier <= max_tier]
@@ -134,11 +156,11 @@ def pick_template(
         # repetir una plantilla reciente antes que faltar a la promesa. Si ni
         # así hay nada (se salteó desde T0), el tope se ignora.
         if not easier:
-            easier = [t for t in TEMPLATES if t.tier <= max_tier]
+            easier = [t for t in permitidas if t.tier <= max_tier]
         if easier:
             candidates = easier
     if not candidates:
-        candidates = list(TEMPLATES)
+        candidates = list(permitidas)
 
     stats = stats_for(db, candidates)
     # `effective_beta` y no `stat.beta`: la β guardada de una plantilla que
