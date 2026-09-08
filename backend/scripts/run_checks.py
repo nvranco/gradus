@@ -49,6 +49,7 @@ SCRIPTS = Path(__file__).resolve().parent
 CHECKS = [
     "check_adaptive_session_size",
     "check_aforo",
+    "check_alias_vocabulario",
     "check_avisos_de_evento",
     "check_cafecito_email",
     "check_cafecito_stream",
