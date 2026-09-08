@@ -35,25 +35,23 @@ UMBRAL_ESTADISTICAS = 10
 # Piso de jugadores CALIFICADOS para dibujar el histograma. Con menos, una
 # campana de pocos puntos no es un gráfico: señala quiénes son y de paso
 # miente sobre la forma real de la distribución. Mismo espíritu que
-# boosts.MIN_PLAYERS_RANKED (10) y metrics.game_queries.MIN_OBS_TEMPLATE: no
-# se muestra un número —acá, un dibujo— con poca base. Más alto que
+# boosts.MIN_PLAYERS_RANKED (10): no se muestra un número —acá, un dibujo—
+# con poca base. Más alto que
 # MIN_PLAYERS_RANKED a propósito: un promedio confiable pide menos evidencia
 # que una FORMA confiable.
 MIN_HISTOGRAM_PLAYERS = 20
 
-# Buckets DINÁMICOS y no fijos como PHAT_BINS (metrics/game_queries.py).
-# PHAT_BINS puede ser fijo porque p̂ vive en [0,1] con una banda objetivo fija
-# que ancla los bordes (elo.TARGET_LOW / TARGET_HIGH). El rating no tiene ese
-# ancla poblacional todavía —el juego lanzó el 24/8/2026, días antes de este
-# archivo— así que un ancho fijo elegido ahora sería un número inventado. El
-# día que haya semanas de historia real, esto puede fijarse igual que
-# PHAT_BINS.
+# Buckets DINÁMICOS y no fijos. Cortar p̂ con bordes fijos se puede porque vive
+# en [0,1] con una banda objetivo que los ancla (elo.TARGET_LOW / TARGET_HIGH).
+# El rating no tiene ese ancla poblacional todavía —el juego lanzó el 24/8/2026,
+# días antes de este archivo— así que un ancho fijo elegido ahora sería un
+# número inventado. El día que haya semanas de historia real, se puede fijar.
 N_BUCKETS = 16
 BUCKET_WIDTH_MIN = 20  # puntos de rating; múltiplo al que se redondea el ancho
 
 # Mínimo de intentos limpios (de la ventana de últimos 10) para animarse a
 # mostrar un % de accuracy en una fila. Con 1 o 2 intentos un 100% o un 0% no
-# dice nada — MIN_OBS_TEMPLATE en miniatura, pero por jugador.
+# dice nada: es la misma regla de «no mostrar un número sin base», por jugador.
 MIN_MUESTRA_FILA = 3
 
 # El θ que hay que sumarle a la β efectiva de una plantilla para que caiga en

@@ -9,12 +9,11 @@ pueden aflojar sin que nadie se entere y convierten el panel en un generador de
 números lindos:
 
   - los estudiantes sembrados (`is_bot`) NO cuentan en ninguna métrica;
-  - un ejercicio respondido con la TABLA ABIERTA no entra en el acierto al
-    primer intento ni en la calibración;
-  - una respuesta que no parsea no es una respuesta: no cuenta como intento, no
-    baja el acierto, y vive en su propia sección;
+  - una respuesta que no parsea no es una respuesta: no cuenta como intento ni
+    baja el acierto;
   - la curva de profundidad se calcula solo sobre partidas CERRADAS;
-  - el CTR del cafecito se cuenta sobre PERSONAS y no sobre impresiones.
+  - el desglose reparte a la misma gente en montones: no cambia la base ni el
+    largo de ninguna partida.
 
 Uso:
     python backend/scripts/check_game_dashboard.py
@@ -43,7 +42,7 @@ sys.path.insert(0, str(BACKEND.parent))
 import database  # noqa: E402
 from models import (  # noqa: E402
     Base, Course, GameAttempt, GameBoost, GameCtaEvent, GameEvent, GameExercise,
-    GamePlayer, GameTemplateStat, Session as SessionModel, User,
+    GamePlayer, User,
 )
 
 Base.metadata.create_all(database.engine)
@@ -99,13 +98,18 @@ s.flush()
 # p2  invitado, UBA, 3 respuestas, partida CERRADA
 # p3  invitado, UTN, 1 respuesta, partida ABIERTA (respondió hace 1 h)
 # p4  registrado con cuenta vieja, UTN, 5 respuestas, cerrada
+# p5  de CUATRO semanas antes y vuelve a jugar en esta: el único retenido, y el
+#     único que ya existía cuando la semana empezó —o sea, el denominador de la
+#     viralidad—. Cuatro semanas y no una para que quede afuera de la ventana
+#     visible: acá se lo quiere solo como "el de antes", no como parte de las
+#     cohortes que miden profundidad, difusión y aparato.
 # p9  BOT: no tiene que aparecer en ninguna métrica
 PLAYERS = [
     dict(id=1, user_id=1, alias="uno", university="UBA", career="E", is_bot=False,
          platform="desktop",
          created_at=T(0, 14), last_seen_at=T(0, 16)),
     dict(id=2, user_id=None, alias="dos", university="UBA", career="E", is_bot=False,
-         platform="android",
+         platform="android", referred_by=5,
          created_at=T(1, 14), last_seen_at=T(1, 15)),
     dict(id=3, user_id=None, alias="tres", university="UTN", career="S", is_bot=False,
          platform="ios",
@@ -113,6 +117,9 @@ PLAYERS = [
     dict(id=4, user_id=2, alias="cuatro", university="UTN", career="E", is_bot=False,
          platform="android",
          created_at=T(2, 14), last_seen_at=T(2, 15)),
+    dict(id=5, user_id=None, alias="cero", university=None, career=None,
+         is_bot=False, platform=None,
+         created_at=T(-28, 14), last_seen_at=T(0, 15)),
     dict(id=9, user_id=None, alias="bot", university="UBA", career="E", is_bot=True,
          platform="desktop",
          created_at=T(0, 10), last_seen_at=T(0, 11)),
@@ -120,9 +127,6 @@ PLAYERS = [
 for p in PLAYERS:
     s.add(GamePlayer(theta=0.5, n_updates=5, xp=100, unlocked_keys="pow,sq", **p))
 
-s.add(GameTemplateStat(template_key="t1_pow", tier=1, beta=-1.6, n_observations=30, n_correct=24))
-s.add(GameTemplateStat(template_key="t5_ln_over_x", tier=5, beta=0.9,
-                       n_observations=5, n_correct=1))
 s.flush()
 
 # ── Ejercicios y respuestas ──────────────────────────────────────────────────
@@ -199,6 +203,11 @@ for i in range(5):
     responder(ex, 4, T(2, 14, i), correcto=True)
 servir(4, T(2, 14, 30), 0.35, template="t5_ln_over_x", status="skipped")
 
+# p5 vuelve: una respuesta en la semana de referencia, cuatro semanas después
+# de su alta. Es lo único que lo hace contar como retenido.
+ex = servir(5, T(0, 15), 0.70)
+responder(ex, 5, T(0, 15), correcto=True)
+
 # Bot: 50 respuestas que NO tienen que aparecer en ningún lado.
 for i in range(50):
     ex = servir(9, T(0, 12, i % 60), 0.90)
@@ -228,11 +237,6 @@ s.add(GameEvent(kind="boost", text="alguien invitó un cafecito", emoji="☕",
                 university="UBA", created_at=T(0, 14)))
 s.add(GameEvent(kind="climb", text="subió 4 puestos", emoji="🚀", created_at=T(0, 15)))
 
-# Sesión de estudio real de p1 en Intervalo, y una de onboarding que NO cuenta.
-s.add(SessionModel(user_id=1, course_id=1, mode="main", exercises_total=8,
-                   started_at=T(1, 14), finished_at=T(1, 14, 20)))
-s.add(SessionModel(user_id=2, course_id=1, mode="onboarding", exercises_total=1,
-                   started_at=T(1, 14), finished_at=T(1, 14, 5)))
 s.commit()
 
 data = q.load(s)
@@ -240,7 +244,7 @@ weeks = q._weeks_back(WEEK, 4)
 
 # ── 1 · Los bots no existen ──────────────────────────────────────────────────
 print("\n— bots —")
-check("los estudiantes sembrados se excluyen", len(data["players"]) == 4,
+check("los estudiantes sembrados se excluyen", len(data["players"]) == 5,
       f'({len(data["players"])} estudiantes)')
 check("sus ejercicios también", all(e["player_id"] != 9 for e in data["exercises"]))
 check("sus respuestas también", all(a["player_id"] != 9 for a in data["attempts"]))
@@ -250,37 +254,61 @@ check("se informa cuántos se sacaron", data["_bots"] == 1)
 # ── 2 · Qué es una respuesta ─────────────────────────────────────────────────
 print("\n— respuestas —")
 # p1: 12 + 1 mirada + 1 buena tras el fallo de parseo = 14 primeros intentos.
-# p2: 4. p3: 1. p4: 5. Total 24 respuestas parseadas.
-check("lo que no parsea no es respuesta", len(data["_answers"]) == 24,
+# p2: 4. p3: 1. p4: 5. p5: 1. Total 25 respuestas parseadas.
+check("lo que no parsea no es respuesta", len(data["_answers"]) == 25,
       f'({len(data["_answers"])})')
 check("el fallo de parseo sí queda registrado",
       sum(1 for a in data["attempts"] if not a["parse_ok"]) == 1)
-clean = q._clean_firsts(data)
-check("el ejercicio con la tabla abierta sale del P1", len(clean) == 23,
-      f'({len(clean)} primeros intentos limpios)')
+# Los primeros intentos son la unidad de la curva de profundidad: el largo de
+# una partida es cuántas derivadas DISTINTAS enfrentó, no cuántas veces tipeó.
+# En este escenario nadie usó el segundo intento, así que coinciden — lo que se
+# clava acá es que el fallo de parseo, que sí ocurrió, no cuenta como ninguno.
+check("el largo de la partida se mide en primeros intentos",
+      len(data["_firsts"]) == 25 and len(data["_firsts"]) == len(data["_answers"]),
+      f'({len(data["_firsts"])} primeros intentos sobre {len(data["_answers"])} respuestas)')
 
-# ── 3 · Titulares ────────────────────────────────────────────────────────────
-print("\n— titulares —")
+# ── 3 · Titulares ──────────────────────────────────────────────────────────
+print()
+print("— titulares —")
 h = {c["label"]: c for c in q.headline(data, weeks)}
-check("estudiantes nuevos de la semana", h["Estudiantes nuevos"]["value"] == 4,
-      f'({h["Estudiantes nuevos"]["value"]})')
-# p3 respondió recién el lunes siguiente: cae en la semana de al lado.
-check("estudiantes activos", h["Estudiantes activos"]["value"] == 3,
-      f'({h["Estudiantes activos"]["value"]})')
-# Correctas parseadas DE ESTA SEMANA: p1 9+2+1(peek)+1 = 13, p2 3, p4 5 → 21.
-# La de p3 cae en la semana siguiente.
-check("derivadas resueltas", h["Derivadas resueltas"]["value"] == 21,
-      f'({h["Derivadas resueltas"]["value"]})')
-# P1 limpio de la semana: 22 primeros intentos, 20 correctos (falla el i==3 de
-# p1 y el i==2 de p2) → 90,9%. Sin la exclusión de la tabla serían 23 y 21.
-check("el acierto al primer intento excluye la tabla",
-      h["Acierto al primer intento"]["value"] == 90.9,
-      f'({h["Acierto al primer intento"]["value"]}%)')
-# Solo p1 pasa las 10 derivadas → 1 de 4.
-check("llegan a 10", h["Llegan a 10"]["value"] == 25.0)
-check("se registran", h["Se registran"]["value"] == 50.0)
+# Los cuatro estudiantes de la semana, más nadie: el bot no cuenta y p3 respondió
+# recién el lunes siguiente, así que su respuesta cae en la semana de al lado.
+check("usuarios nuevos de la semana", h["Usuarios nuevos"]["value"] == 4,
+      f'({h["Usuarios nuevos"]["value"]})')
+# "Ingresó" se arma con toda huella fechada, no solo con el alta: los cuatro
+# altas de la semana más p0, que es de antes y volvió a jugar.
+check("los ingresos suman a los que ya existían y volvieron",
+      h["Ingresos"]["value"] == 5, f'({h["Ingresos"]["value"]})')
+check("y son personas distintas, no visitas",
+      h["Ingresos"]["value"] >= h["Usuarios nuevos"]["value"])
+check("se registran", h["Se registran"]["value"] == 50.0,
+      f'({h["Se registran"]["value"]}%)')
+# p0 es de una semana anterior y jugó en esta; los cuatro nuevos no cuentan acá
+# por más que hayan jugado, porque su alta es de esta misma semana.
+check("los retenidos son de otra semana", h["Usuarios retenidos"]["value"] == 1,
+      f'({h["Usuarios retenidos"]["value"]})')
 check("el titular de cafecitos no cuenta los grants a mano",
       h["Cafecitos"]["value"] == 3, f'({h["Cafecitos"]["value"]}, no 6)')
+check("los reclutas son los que entraron por el link de otro",
+      h["Reclutas"]["value"] == 1, f'({h["Reclutas"]["value"]})')
+# Un recluta sobre el único jugador que existía antes de la semana.
+check("la viralidad se divide por los que ya estaban",
+      h["Coeficiente de viralidad"]["value"] == 1.0,
+      f'({h["Coeficiente de viralidad"]["value"]})')
+check("y se muestra con dos decimales", h["Coeficiente de viralidad"]["dec"] == 2)
+# La primera tanda de p1 son las 9 correctas del bloque del día 0 (la décima cae
+# más de media hora después); p2 3, p4 5. p3 no respondió en esta semana.
+# p1 respondió 12 veces el día 0, pero las últimas dos son dos horas después:
+# su primera tanda son las diez seguidas, con nueve aciertos. Si el corte no
+# existiera daría 12 y este número mediría "cuánto jugó en total el día que
+# entró", que es otra cosa.
+check("la primera sesión corta en el primer hueco de media hora",
+      q._correctas_de_la_primera_sesion(
+          [a for a in data["_answers"] if a["player_id"] == 1]) == 9)
+# Primeras tandas: p1 9, p2 2, p4 5, p3 1 (su tanda cae recién el lunes
+# siguiente, pero el alta es de esta semana y la cohorte es por alta).
+check("y la mediana es sobre los nuevos que llegaron a responder",
+      h["Primera sesión"]["value"] == 3.5, f'({h["Primera sesión"]["value"]})')
 
 # ── 4 · Embudo ───────────────────────────────────────────────────────────────
 print("\n— embudo —")
@@ -289,14 +317,19 @@ pasos = {p["label"]: p["n"] for p in f["steps"]}
 check("base = estudiantes de la cohorte", f["base"] == 4)
 check("todos vieron una derivada", pasos["Vio una derivada"] == 4)
 check("todos respondieron", pasos["Respondió"] == 4)
-check("llegó a 5", pasos["Llegó a 5"] == 2, f'({pasos["Llegó a 5"]})')
+# El paso lleva el número del hito de producto, no un redondo: se pide carrera
+# y universidad en la tercera, y el paso de al lado —«cargó universidad»— se lee
+# contra los que llegaron a que se lo preguntaran.
+check("el paso anterior a la universidad es el hito real",
+      pasos[f"Llegó a {q.PEDIDO_PERFIL}"] == 3,
+      f'({pasos[f"Llegó a {q.PEDIDO_PERFIL}"]})')
 check("llegó a 10", pasos["Llegó a 10"] == 1)
 check("volvió otro día", pasos["Volvió otro día"] == 1, f'({pasos["Volvió otro día"]})')
 # Los pasos que no están anidados no pueden mostrar «% del paso anterior»: era
 # de donde salía el «600% del paso anterior» que no quiere decir nada.
 por_label = {p["label"]: p for p in f["steps"]}
 check("los pasos anidados se leen contra el anterior",
-      por_label["Llegó a 5"]["pct_prev"] is not None)
+      por_label[f"Llegó a {q.PEDIDO_PERFIL}"]["pct_prev"] is not None)
 check("los que no lo están, no", por_label["Cargó universidad"]["pct_prev"] is None
       and por_label["Se registró"]["pct_prev"] is None
       and por_label["Volvió otro día"]["pct_prev"] is None)
@@ -320,116 +353,86 @@ check("S(6) deja solo a p1", curva[6]["vivos"] == 1)
 check("S(15) es cero", curva[15]["vivos"] == 0)
 check("mediana de derivadas", pr["mediana"] == 5.0, f'({pr["mediana"]})')
 
-# ── 6 · Motor ────────────────────────────────────────────────────────────────
-print("\n— motor —")
-mo = q.motor(data, weeks)
-cal = {c["label"]: c for c in mo["calibracion"]}
-# El bin 70–80% se lleva los 12 de p1 (0,75) + los 5 de p4 (0,72) + el que
-# siguió al fallo de parseo = 18; falla uno → 17/18 = 94,4%.
-check("la calibración usa solo primeros intentos limpios", cal["70–80%"]["n"] == 18,
-      f'({cal["70–80%"]["n"]})')
-check("y su tasa observada", cal["70–80%"]["observado"] == 94.4,
-      f'({cal["70–80%"]["observado"]}%)')
-check("el bin <40% no tiene respuestas limpias (era la mirada)",
-      cal["<40%"]["n"] == 0, f'({cal["<40%"]["n"]})')
-check("hay error de calibración calculado", mo["ece"] is not None)
-# Servidos: 12 + 1 peek + 1 parse + 4 (p2) + 1 (p3) + 6 (p4, uno salteado) = 25.
-check("servidos", mo["servidos"] == 25, f'({mo["servidos"]})')
-check("salteo sobre servidos", mo["salteo_pct"] == 4.0, f'({mo["salteo_pct"]}%)')
-check("consultas a la tabla sobre servidos", mo["peek_pct"] == 4.0, f'({mo["peek_pct"]}%)')
-cont = {c["label"]: c for c in mo["continuidad"]}
-check("la continuidad mira si hubo otra derivada después",
-      cont["70–80%"]["ok_n"] > 0 and cont["70–80%"]["ok"] is not None)
-check("la escalera de θ tiene puntos", len(mo["escalera"]) >= 5)
+# ── 6 · El desglose de la profundidad ──────────────────────────────────────
+print()
+print("— desglose —")
+# El corte reparte a la MISMA gente en montones: no cambia quién entra ni cuánto
+# aguantó cada uno. Si eso se rompiera, dos cortes contarían poblaciones
+# distintas y compararlos no querría decir nada.
+for c in q.CORTES:
+    d = q.profundidad(data, weeks, now=NOW, corte=c)
+    check(f"el corte «{c}» no cambia la base", d["base"] == pr["base"],
+          f'({d["base"]} vs {pr["base"]})')
+    check(f"ni el escalón del titular en «{c}»", d["peor_escalon"] == pr["peor_escalon"])
 
-# ── 7 · Plantillas ───────────────────────────────────────────────────────────
-print("\n— plantillas —")
-pl = q.plantillas(data, weeks)
-por_key = {r["key"]: r for r in pl["filas"]}
-check("t1_pow acumula lo servido", por_key["t1_pow"]["servidos"] == 24,
-      f'({por_key["t1_pow"]["servidos"]})')
-check("t5_ln_over_x se sirvió una vez y se salteó",
-      por_key["t5_ln_over_x"]["servidos"] == 1 and por_key["t5_ln_over_x"]["salteo"] == 100.0)
-check("las plantillas verdes se marcan", "t5_ln_over_x" in pl["verdes"])
-check("t1_pow ya no es verde", "t1_pow" not in pl["verdes"])
+# Cinco partidas cerradas es el piso para tener línea propia. En el escenario
+# solo p1, p2 y p4 están cerrados —tres— así que ninguna universidad ni ningún
+# aparato llega, y el desglose queda deliberadamente vacío en vez de dibujar
+# tres curvas de una persona.
+uni = q.profundidad(data, weeks, now=NOW, corte="universidad")
+check("un grupo con menos de cinco partidas no dibuja línea",
+      uni["series"] == [], f'({[x["label"] for x in uni["series"]]})')
+check("y se informa que el desglose no cubre nada", uni["cubiertos"] == 0)
 
-# ── 8 · Cafecito ─────────────────────────────────────────────────────────────
-print("\n— cafecito —")
-ca = q.cafecito(data, weeks)
-fila = ca["filas"][-1]
-check("impresiones de la semana", fila["impresiones"] == 4, f'({fila["impresiones"]})')
-check("el CTR se cuenta sobre personas", fila["ctr"] == 50.0, f'({fila["ctr"]}%)')
-check("los cafecitos del titular son solo los donados", fila["cafecitos"] == 3,
-      f'({fila["cafecitos"]}, y {fila["manuales"]} a mano aparte)')
-check("los grants a mano se cuentan pero no se mezclan",
-      fila["manuales"] == 3 and fila["empujes"] == 1 and fila["empujes_manuales"] == 1)
-check("cafecitos por click ignora los grants a mano", fila["por_click"] == 3.0,
-      "(con los 3 a mano adentro daría 6,0)")
-check("el total tampoco los mezcla",
-      ca["total_cafecitos"] == 3 and ca["total_manuales"] == 3)
-trig = {t["trigger"]: t for t in ca["por_trigger"]}
-check("el disparador milestone convierte", trig["milestone"]["ctr"] == 50.0)
-check("el disparador record no", trig["record"]["ctr"] == 0.0)
-check("compartir se mide aparte", ca["share"]["ctr"] == 100.0)
-check("cada ventana dice de dónde salió",
-      {(x["source"], x["university"]) for x in ca["ventanas"]}
-      == {("cafecito", "UBA"), ("manual", "UTN")},
-      f'({[(x["source"], x["university"]) for x in ca["ventanas"]]})')
-check("y quién donó, que es lo único que delata la alerta de prueba",
-      any(x["donante"] == "Nico" for x in ca["ventanas"]))
-v = [x for x in ca["ventanas"] if x["university"] == "UBA"][0]
-check("la ventana del empuje mide su propia universidad", v["university"] == "UBA")
-check("y cuenta las respuestas de adentro", v["respuestas"] > 0, f'({v["respuestas"]})')
-check("con un ritmo basal de la misma universidad", v["basal"] is not None)
+# Con el piso bajado a uno aparecen, y las líneas suman exactamente el total:
+# es la propiedad que hace que el desglose sea un reparto y no otro recorte.
+q.MIN_BASE_SERIE = 1
+try:
+    uni = q.profundidad(data, weeks, now=NOW, corte="universidad")
+    apa = q.profundidad(data, weeks, now=NOW, corte="aparato")
+    coh = q.profundidad(data, weeks, now=NOW, corte="cohorte")
+    check("por universidad salen UBA y UTN",
+          {x["label"] for x in uni["series"]} == {"UBA", "UTN"},
+          f'({[x["label"] for x in uni["series"]]})')
+    check("cada línea lleva su sigla para poder pintarla con su color",
+          all(x["clave"] for x in uni["series"]))
+    check("las líneas del aparato suman el total",
+          sum(x["base"] for x in apa["series"]) == apa["base"],
+          f'({sum(x["base"] for x in apa["series"])} de {apa["base"]})')
+    check("y van en el orden de la plataforma, no por tamaño",
+          [x["label"] for x in apa["series"]] == ["Android", "Escritorio"],
+          f'({[x["label"] for x in apa["series"]]})')
+    check("las cohortes van de la más vieja a la más nueva",
+          [x["label"] for x in coh["series"]]
+          == sorted(x["label"] for x in coh["series"]))
+    check("y no son más de tres", len(coh["series"]) <= q.MAX_COHORTES)
+finally:
+    q.MIN_BASE_SERIE = 5
 
-# ── 9 · Rivalidad, difusión, entrada ─────────────────────────────────────────
-print("\n— resto —")
-ri = q.rivalidad(data, weeks)
-unis = {u["university"]: u for u in ri["universidades"]}
-check("dos universidades", set(unis) == {"UBA", "UTN"})
-check("el XP por estudiante es el que ordena", unis["UBA"]["estudiantes"] == 2)
-check("los eventos del feed se cuentan", sum(e["n"] for e in ri["eventos"]) == 2)
+check("un corte que no existe cae en el total",
+      q.profundidad(data, weeks, now=NOW, corte="inventado")["corte"] == "total")
 
-en = q.entrada(data, weeks)
-check("un fallo de parseo sobre 25 envíos", en["fallos"] == 1 and en["intentos"] == 25,
-      f'({en["fallos"]}/{en["intentos"]})')
-check("tasa de fallo", en["pct_fallos"] == 4.0)
-check("nadie fue a un segundo intento", en["segundo_intento"] == 0.0)
+# La cohorte es la de la SEMANA ELEGIDA y no la ventana visible entera. Sin el
+# corte por arriba, pedir una semana vieja devolvía una curva con gente que esa
+# semana todavía no existía: p5 es de cuatro semanas antes y su cohorte es él
+# solo, aunque después hayan entrado cuatro más.
+vieja = q._weeks_back(WEEK - timedelta(weeks=4), 4)
+pv = q.profundidad(data, vieja, now=NOW)
+check("la cohorte es la de la semana elegida, no la ventana",
+      pv["base"] == 1, f'({pv["base"]}, y la de {WEEK} tiene {pr["base"]})')
+check("y no arrastra las altas posteriores",
+      pv["base"] + pr["base"] == 4, f'({pv["base"]} + {pr["base"]})')
 
-print("\n— dispositivo —")
-de = q.dispositivo(data, weeks, now=NOW)
-por_plat = {f["label"]: f for f in de["filas"]}
-check("un aparato por estudiante, el de primer contacto",
-      por_plat["Android"]["estudiantes"] == 2
-      and por_plat["Escritorio"]["estudiantes"] == 1
-      and por_plat["iOS"]["estudiantes"] == 1,
-      f'({ {k: v["estudiantes"] for k, v in por_plat.items()} })')
-# Los hechos del aparato se atribuyen por EJERCICIO: p2 volvió desde la compu,
-# así que ese ejercicio suma a Escritorio aunque p2 sea un estudiante Android.
-check("los ejercicios se atribuyen al aparato que los pidió",
-      por_plat["Android"]["servidos"] == 9 and por_plat["Escritorio"]["servidos"] == 15,
-      f'(android {por_plat["Android"]["servidos"]}, '
-      f'escritorio {por_plat["Escritorio"]["servidos"]})')
-check("y por eso alguien puede aparecer en dos aparatos", de["cambiaron"] == 1,
-      f'({de["cambiaron"]} de {de["con_aparato"]})')
-check("la mediana de derivadas es sobre los que jugaron, no sobre los que llegaron",
-      por_plat["Escritorio"]["derivadas_mediana"] == 13.0,
-      f'({por_plat["Escritorio"]["derivadas_mediana"]})')
-check("el % de teléfono se calcula sobre los que tienen dato",
-      de["por_semana"][-1]["pct_telefono"] == 75.0,
-      f'({de["por_semana"][-1]["pct_telefono"]}%)')
-check("la curva por aparato deja afuera las partidas abiertas",
-      all(c["label"] != "iOS" for c in de["curvas"]),
-      f'({[c["label"] for c in de["curvas"]]})')
-check("el cafecito se corta por aparato",
-      any(c["label"] == "Escritorio" and c["ctr"] == 100.0 for c in de["cta"]),
-      f'({de["cta"]})')
+# «Por cohorte» sí trae otras camadas: la elegida y las dos anteriores. Es el
+# único corte que NO parte la cohorte, y por eso sus líneas no suman el total.
+q.MIN_BASE_SERIE = 1
+try:
+    tres = q.profundidad(data, q._weeks_back(WEEK - timedelta(weeks=2), 4),
+                         now=NOW, corte="cohorte")
+    check("por cohorte alcanza dos semanas para atrás",
+          {x["clave"] for x in tres["series"]}
+          == {(WEEK - timedelta(weeks=4)).isoformat()},
+          f'({[x["clave"] for x in tres["series"]]})')
+    lejos = q.profundidad(data, q._weeks_back(WEEK - timedelta(weeks=1), 4),
+                          now=NOW, corte="cohorte")
+    check("y una camada de tres semanas atrás ya no entra",
+          all(x["clave"] != (WEEK - timedelta(weeks=4)).isoformat()
+              for x in lejos["series"]),
+          f'({[x["clave"] for x in lejos["series"]]})')
+finally:
+    q.MIN_BASE_SERIE = 5
 
-di = q.difusion(data, weeks)
-check("sin grupo de origen todos caen en el mismo bucket",
-      di["origen"][0]["label"] == "sin grupo" and di["origen"][0]["n"] == 4)
-
-# ── 10 · La página se arma ───────────────────────────────────────────────────
+# ── 7 · La página se arma ───────────────────────────────────────────────────
 print("\n— render —")
 payload = q.build(s, WEEK)
 html = game_render.page(payload, token="tok")
@@ -438,40 +441,54 @@ check("no quedó ningún None crudo en el HTML", "None" not in html)
 check("lleva el papel cuadriculado del juego", "background-size:40px 40px" in html)
 check("y el borde de las cajas del juego", "#38385a" in html)
 check("enlaza el panel de Intervalo", "/panel/tok</a>" in html or "/panel/tok'" in html)
-check("el data.json queda linkeado", "/panel/tok/derivemos/data.json" in html)
+check("el data.json queda linkeado", "/panel/tok/dx/data.json" in html)
 
 # Una semana sin nada tiene que armarse igual y no romperse por dividir por cero.
 vacio = q.build(s, WEEK + timedelta(weeks=8))
 html2 = game_render.page(vacio, token="tok")
 check("una semana vacía no rompe el panel", len(html2) > 5000)
 
-# La fórmula de ejemplo de cada plantilla, que se dibuja con MathML.
-#
-# Esto se chequea aparte y no se da por visto en el HTML porque `_ejemplo_mathml`
-# atrapa CUALQUIER excepción y devuelve None —una plantilla rota no puede voltear
-# el panel entero, y eso está bien— pero esa misma red hace que un ejemplo que
-# dejó de dibujarse no se note en ningún lado: no hay error, no hay log, solo una
-# columna que se queda vacía.
-#
-# Pasó de verdad: cuando las plantillas empezaron a ciclar sus números, `build`
-# cambió de firma y esta llamada quedó tirando TypeError en las 29, en silencio,
-# durante varios deploys. Todos los chequeos del panel seguían en verde.
-from metrics.game_queries import _ejemplo_mathml  # noqa: E402
-from game.templates import TEMPLATE_BY_KEY  # noqa: E402
+# Cada pestaña se arma sola y trae SU sección y ninguna otra: es lo que hace que
+# el panel deje de ser un scroll.
+titulos = {"titulares": "Titulares", "embudo": "Embudo de la partida",
+           "profundidad": "Profundidad"}
+for clave, _ in game_render.SECCIONES:
+    h = game_render.page(q.build(s, WEEK), token="tok", seccion=clave)
+    otros = [t for k, t in titulos.items() if k != clave]
+    check(f"la pestaña «{clave}» trae su sección",
+          f'>{titulos[clave]}</h2>' in h or titulos[clave] in h)
+    check(f"y ninguna otra en «{clave}»",
+          not any(f'<h2><b>' in h and t in h.split('<h2>')[-1] for t in otros)
+          or h.count("<h2>") == 1,
+          f'({h.count(chr(60) + "h2>")} secciones)')
+    check(f"la pestaña «{clave}» queda marcada en la barra",
+          f'<span class="cur">{titulos[clave].split()[0]}</span>' in h)
 
-sin_ejemplo = [k for k in TEMPLATE_BY_KEY if not _ejemplo_mathml(k)]
-check(
-    "todas las plantillas dibujan su fórmula de ejemplo",
-    not sin_ejemplo,
-    f"(sin ejemplo: {sin_ejemplo})" if sin_ejemplo else f"({len(TEMPLATE_BY_KEY)} plantillas)",
-)
-# Y el mismo ejemplo entre llamadas: la semilla sale de `crc32(key)` justamente
-# para que el panel no cambie de fórmula en cada reinicio del backend.
-primera = next(iter(TEMPLATE_BY_KEY))
-check(
-    "y el ejemplo de una plantilla no cambia entre llamadas",
-    _ejemplo_mathml(primera) == _ejemplo_mathml(primera),
-)
+# Una pestaña inventada cae en la primera en vez de dar una página vacía.
+h = game_render.page(q.build(s, WEEK), token="tok", seccion="inventada")
+check("una pestaña que no existe cae en la primera", h.count("<h2>") == 1
+      and "Titulares" in h)
+
+# Los cuatro cortes tienen que armar la pestaña de profundidad, incluido el que
+# se queda sin series: ahí el gráfico no se dibuja y la caja se cae si nadie lo
+# previó.
+for c in q.CORTES:
+    h = game_render.page(q.build(s, WEEK, corte=c), token="tok", seccion="profundidad")
+    check(f"la página se arma con el corte «{c}»", len(h) > 8000, f"({len(h)} bytes)")
+    # El corte activo se dibuja como texto marcado y no como link: los otros
+    # tres siguen siendo links, y el activo no puede llevar a sí mismo.
+    activo = {"total": "Todos", "cohorte": "Por cohorte",
+              "universidad": "Por universidad", "aparato": "Por aparato"}[c]
+    check(f"y el corte «{c}» queda marcado en la barra",
+          f'<span class="cur">{activo}</span>' in h)
+    # Las tres barras conviven: cambiar de semana o de pestaña no puede perder
+    # el desglose elegido, y elegir desglose no puede devolver a la primera
+    # pestaña. Se verifica sobre los links, que es donde viaja el estado.
+    if c != "total":
+        check(f"y el corte «{c}» viaja en los links de semana y pestaña",
+              h.count(f"&corte={c}") >= 3, f'({h.count(f"&corte={c}")} links)')
+    check(f"los links de la barra de cortes conservan la pestaña con «{c}»",
+          h.count("s=profundidad") >= 3, f'({h.count("s=profundidad")} links)')
 
 s.close()
 

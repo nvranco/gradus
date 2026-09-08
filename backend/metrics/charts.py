@@ -32,12 +32,17 @@ def esc(s) -> str:
     return escape(str(s), quote=True)
 
 
-def num(v, suffix: str = "") -> str:
-    """Formato argentino: coma decimal, sin decimales si es entero."""
+def num(v, suffix: str = "", dec: int = 1) -> str:
+    """Formato argentino: coma decimal, sin decimales si es entero.
+
+    `dec` sube la precisión para las magnitudes que viven cerca del cero y que
+    con un decimal se verían todas iguales — el coeficiente de viralidad, que
+    hoy vale centésimas, se leería «0,0» para cualquier valor real.
+    """
     if v is None:
         return "—"
     if isinstance(v, float) and not v.is_integer():
-        return f"{v:.1f}".replace(".", ",") + suffix
+        return f"{v:.{dec}f}".replace(".", ",") + suffix
     return f"{int(v)}{suffix}"
 
 
@@ -237,7 +242,11 @@ def lines(series: list[dict], x_labels: list[str], *, suffix: str = "%",
 
     alphas = ramp(len(series)) if mono else [1.0] * len(series)
     for si, s in enumerate(series):
-        color = MONO if mono else SERIES[si % len(SERIES)]
+        # `color` propio de la serie: lo usa el desglose por universidad, donde
+        # el color NO es un número de orden sino la marca de cada casa de
+        # estudios — la misma que el jugador ve en su chip del ranking. Si la
+        # serie no trae uno, se cae en la paleta por posición de siempre.
+        color = s.get("color") or (MONO if mono else SERIES[si % len(SERIES)])
         op = alphas[si]
         weak = s.get("weak") or [False] * len(s["values"])
         if mono and len(series) > 1:
@@ -303,9 +312,13 @@ def lines(series: list[dict], x_labels: list[str], *, suffix: str = "%",
             continue
         out.append(f'<text x="{pad_l + i * step:.1f}" y="{height - pad_b + 16}" '
                    f'text-anchor="middle" fill="var(--fg)" font-size="11" {FONT}>{esc(lab)}</text>')
-    if legend and len(series) > 1:
+    # La leyenda la decide quien llama, incluso con una sola serie: en un
+    # desglose de una sola categoría —una universidad que es la única con base
+    # suficiente— la línea sale de color y sin nombre, y no hay forma de saber
+    # de quién es.
+    if legend and series:
         out.append(_legend([s["label"] for s in series], pad_l, height - 4,
-                           mono=mono))
+                           mono=mono, colors=[s.get("color") for s in series]))
     return _svg(width, height, "".join(out))
 
 
@@ -402,11 +415,13 @@ def _grid(pad_l: int, pad_t: int, w: float, h: float, top: float, suffix: str) -
     return "".join(out)
 
 
-def _legend(labels: list[str], x: float, y: float, mono: bool = False) -> str:
+def _legend(labels: list[str], x: float, y: float, mono: bool = False,
+            colors: list[str | None] | None = None) -> str:
     alphas = ramp(len(labels)) if mono else [1.0] * len(labels)
     out, cx = [], x
     for i, lab in enumerate(labels):
-        color = MONO if mono else SERIES[i % len(SERIES)]
+        propio = (colors or [None] * len(labels))[i]
+        color = propio or (MONO if mono else SERIES[i % len(SERIES)])
         # Mismo índice que el <g> de la serie en lines(): un toggle apaga la
         # línea y su chip de leyenda con la misma regla CSS.
         out.append(f'<g class="cht-s{i}">'

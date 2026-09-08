@@ -281,7 +281,7 @@ def page(p: dict, *, token: str) -> str:
         f"<div class='box'><span class='sub'>{m['usuarios']} usuarios en la base</span>"
         # El minijuego tiene su propio panel: mismo token, otro vocabulario.
         # Se enlaza desde acá para que no haya que acordarse de la URL.
-        f"<a href='/panel/{esc(token)}/derivemos'>Derivemos →</a></div>",
+        f"<a href='/panel/{esc(token)}/dx'>dx →</a></div>",
         "</header>",
         f"<nav class='jump'>{jump}</nav>",
     ]
@@ -641,7 +641,7 @@ def page(p: dict, *, token: str) -> str:
                        f'de {ca["vencidos"]} empujes ya vencidos')])
         + '</div>'
         f'<p class="note">El embudo completo del cartel —impresiones, clicks, CTR por disparador— '
-        f'vive en el <a href="/panel/{esc(token)}/derivemos">panel de Derivemos</a>, que es donde '
+        f'vive en el <a href="/panel/{esc(token)}/dx">panel de dx</a>, que es donde '
         f'se dispara. Acá solo lo que le pasa a Intervalo cuando alguien dona: cuánta XP repartió '
         f'el empuje en esta app (<code>answers.xp_from_boost</code>, sumada UNA vez por respuesta '
         f'y no por empuje, para no duplicar si dos se solapan) y si el mail que le cuenta al '
