@@ -48,6 +48,13 @@ Producto aparte, con identidad y economía propias pero la misma tabla de
 cafecitos. Lo único documentado acá es **cómo elige qué ejercicio servir**, que
 es la mecánica que gobierna la experiencia entera:
 
+- **El @ se asigna y después se elige.** Quien entra sin cuenta arranca con un
+  @ autogenerado (`game/aliases.py`): `casifinal`, `triplechoripan`,
+  `goldenmedialuna` — comida rioplatense y vida de cursada, sin números. El
+  formato viejo era palabra-del-temario + cuatro dígitos (`modulo4124`) y hacía
+  dos cosas mal: el número delataba que el nombre no lo eligió nadie, y la
+  palabra venía de la materia. Un invitado puede cambiarlo **una vez gratis**;
+  de ahí en más elegir el @ es el gancho del registro.
 - **Elo online, no niveles fijos.** Cada jugador tiene un θ y cada plantilla una
   β; el motor sirve lo que cae en la banda p̂ ∈ [0.70, 0.80], o sea lo que
   estima que va a acertar 3 de cada 4 veces. El θ se muestra en escala de
