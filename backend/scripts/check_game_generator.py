@@ -8,6 +8,9 @@ Cubre la Fase 1 del plan:
      feedback específico; expresiones patológicas se rechazan sin decidir.
   3. La rampa inicial sirve tiers crecientes y la banda objetivo selecciona
      plantillas razonables; el update de Elo mueve θ/β en la dirección correcta.
+  4. El piso de Elo de las trigonométricas: debajo de la barrera no se cuela
+     ninguna por NINGÚN camino de pick_template (rampa, tope del salteo y los
+     fallbacks que se quedan sin candidatos), y encima vuelven a estar en juego.
 
 Uso:
     python backend/scripts/check_game_generator.py
@@ -402,6 +405,70 @@ check(fresh_otra_vez == [], "una tecla ya desbloqueada no se reanuncia")
 print("   muestras (desde cero, una plantilla sola):")
 for key, keys in samples.items():
     print(f"     {key:22s} {' '.join(keys) if keys else '(sin teclas nuevas)'}")
+
+# ── 6. Piso de Elo de las trigonometricas ────────────────────────────────────
+print()
+print("6. piso de Elo")
+from game.generator import desbloqueadas  # noqa: E402
+from game.templates import PISO_TRIGONOMETRICAS  # noqa: E402
+
+CON_PISO = {t.key for t in TEMPLATES if t.min_rating is not None}
+check(CON_PISO == {"t3_sin", "t3_cos", "t3_tan", "t3_trig_sum",
+                   "t4_pow_sin", "t4_exp_cos", "t4_exp_sin", "t5_sin_over_x"},
+      f"el piso cubre las 8 plantillas con seno, coseno o tangente (dio {sorted(CON_PISO)})")
+
+# El θ justo debajo y justo encima de la barrera. rating_of redondea, así que se
+# toma un paso de un punto entero de rating para no depender del redondeo.
+theta_piso = (PISO_TRIGONOMETRICAS - elo.RATING_BASE) / elo.RATING_PER_THETA
+ABAJO = theta_piso - 1 / elo.RATING_PER_THETA
+JUSTO = theta_piso
+
+gate = GamePlayer(guest_token="check-piso", alias="checkpiso")
+db.add(gate)
+db.commit()
+db.refresh(gate)
+
+gate.theta = ABAJO
+check(elo.rating_of(gate.theta) < PISO_TRIGONOMETRICAS, "el jugador de prueba está debajo de la barrera")
+check(not (CON_PISO & {t.key for t in desbloqueadas(gate)}),
+      "debajo del piso no hay ninguna trigonométrica desbloqueada")
+gate.theta = JUSTO
+check(CON_PISO <= {t.key for t in desbloqueadas(gate)},
+      "al tocar la barrera se desbloquean las ocho de una")
+
+# Lo que importa no es la función pura sino que NINGÚN camino de pick_template
+# la esquive: ni la rampa, ni el tope del salteo, ni los fallbacks que se
+# quedan sin candidatos. Se barre θ de −2 a la barrera, con y sin tope.
+gate.theta = ABAJO
+servidas = set()
+for n_updates in (0, 1, 2, 3, 4, 50):
+    gate.n_updates = n_updates
+    for theta in (-2.0, -1.0, -0.5, 0.0, 0.4, 0.8, ABAJO):
+        gate.theta = theta
+        for seed in range(25):
+            servidas.add(pick_template(db, gate, random.Random(seed))[0].key)
+            for tope in (-1, 0, 1, 2, 3, 4, 5):
+                servidas.add(
+                    pick_template(db, gate, random.Random(seed), max_tier=tope)[0].key
+                )
+colados = sorted(CON_PISO & servidas)
+check(not colados, f"debajo del piso no se cuela ninguna por ningún camino (se colaron: {colados})")
+check(len(servidas) >= 10, f"y queda banco de sobra para elegir ({len(servidas)} plantillas distintas)")
+
+# Y del otro lado de la barrera vuelven a estar en juego, que es la mitad que
+# hace que esto sea un piso y no una baja.
+gate.n_updates = 50
+gate.theta = (1400 - elo.RATING_BASE) / elo.RATING_PER_THETA
+arriba = set()
+for seed in range(200):
+    arriba.add(pick_template(db, gate, random.Random(seed))[0].key)
+check(bool(CON_PISO & arriba), f"pasada la barrera vuelven a salir (salieron {sorted(CON_PISO & arriba)})")
+
+# El arranque fijo no toca ninguna: si alguna vez se cambia ONBOARDING por una
+# trigonométrica, el piso no la frenaría —ese camino no pasa por pick_template—.
+from game.generator import ONBOARDING  # noqa: E402
+check(not (CON_PISO & {k for k, _ in ONBOARDING}),
+      "el arranque fijo no incluye ninguna con piso")
 
 print()
 if FAILURES:

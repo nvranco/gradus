@@ -80,23 +80,28 @@ def _unlock_theta(beta: float, tier: int, n_players: int) -> float:
 
 
 # Mapeo EXACTO a las 14 filas de DerivativesTable (derivatives-table.tsx ::
-# FILAS), mismo orden. Las tres tuplas vacías son las tres filas que el
-# generador NUNCA produce (no hay ni una raíz ni una tangente en
-# templates.py, y ningún cociente tiene numerador constante): 1/x, √x y tan x
-# no tienen Elo de desbloqueo que inventar.
+# FILAS), mismo orden.
+#
+# Las tres filas que faltaban —1/x, √x y tan x— eran ciertas hasta el
+# a4978533, que agregó `t1_recip`, `t1_sqrt` y `t3_tan` al final de TEMPLATES
+# sin pasar por acá. Durante esos días el panel mostró «—» en tres de sus
+# catorce filas y tiró a la basura los intentos de esas plantillas al armar la
+# efectividad, porque no tenían dónde ir. Ya no hay ninguna fila sin plantilla:
+# si mañana se agrega otra, esto se actualiza en el mismo commit y
+# check_game_stats.py lo verifica.
 ROW_TEMPLATES: dict[str, tuple[str, ...]] = {
     "a": ("t0_const",),
     "x": ("t0_x",),
     "x_n": ("t1_pow", "t1_kpow"),
-    "inv_x": (),
-    "sqrt_x": (),
+    "inv_x": ("t1_recip",),
+    "sqrt_x": ("t1_sqrt",),
     "e_x": ("t3_exp",),
     "a_x": ("t3_ax",),
     "ln_x": ("t3_ln",),
     "log_a_x": ("t3_loga",),
     "sin_x": ("t3_sin",),
     "cos_x": ("t3_cos",),
-    "tan_x": (),
+    "tan_x": ("t3_tan",),
     "prod": ("t4_pow_sin", "t4_pow_exp", "t4_exp_cos", "t4_pow_ln", "t4_exp_sin"),
     "quot": ("t5_sin_over_x", "t5_pow_over_linear", "t5_exp_over_pow",
              "t5_ln_over_x", "t5_linear_over_linear"),
@@ -122,9 +127,21 @@ class _AccRow:
     avg_response_ms: int | None
 
 
+def _piso_de_fila(keys: tuple[str, ...]) -> int:
+    """El rating a partir del cual el generador puede servir ALGO de esta fila.
+
+    El mínimo y no el máximo: una fila se abre con su primera plantilla
+    disponible. «Producto» tiene tres con seno o coseno y dos sin, así que
+    sigue sin piso — x²·eˣ se puede servir desde siempre—, mientras que las
+    filas de seno, coseno y tangente, que tienen una sola plantilla cada una,
+    heredan el suyo entero.
+    """
+    return min((TEMPLATE_BY_KEY[k].min_rating or 0) for k in keys)
+
+
 def _unlock_ratings(db: DBSession) -> dict[str, int | None]:
-    """Elo de desbloqueo por fila (14 slugs). None solo para las 3 filas sin
-    plantilla — nunca un número inventado."""
+    """Elo de desbloqueo por fila (14 slugs). `None` solo si alguna fila se
+    quedara sin plantilla — hoy no hay ninguna."""
     stats = {t.template_key: t for t in db.query(GameTemplateStat).all()}
     out: dict[str, int | None] = {}
     for slug, keys in ROW_TEMPLATES.items():
@@ -141,7 +158,12 @@ def _unlock_ratings(db: DBSession) -> dict[str, int | None]:
         # Promedio en espacio θ y no de los ratings ya redondeados: promediar
         # números ya redondeados y volver a redondear acumula un sesgo que no
         # existe si se promedia antes de la única conversión.
-        out[slug] = elo.rating_of(sum(thetas) / len(thetas))
+        comodo = elo.rating_of(sum(thetas) / len(thetas))
+        # El piso gana cuando hay uno: la β aprendida del seno lo daría por
+        # cómodo en 870, y en 870 el generador no lo va a servir. Un panel que
+        # promete una fila antes de que el motor la habilite miente en la única
+        # pantalla donde el jugador va a buscar cuánto le falta.
+        out[slug] = max(comodo, _piso_de_fila(keys))
     return out
 
 
