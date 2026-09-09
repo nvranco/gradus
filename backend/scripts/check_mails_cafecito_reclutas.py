@@ -101,7 +101,15 @@ ok = le.send_reclutas_semanal_email(db, u, xp_semana=215, filas=filas)
 check("se manda", ok)
 mail = enviados[-1]
 check("el asunto lleva el total", "215 XP" in mail["subject"], f"({mail['subject']!r})")
+check("y dice que las generaron los reclutas, no que las dieron",
+      mail["subject"] == "Tus reclutas generaron 215 XP esta semana 🪖", mail["subject"])
 check("el destacado dice de cuántas personas", "de 3 personas" in mail["html"])
+# Con un solo recluta decía "de 1 personas", que es la clase de detalle que hace
+# dudar de si el número está bien.
+enviados.clear()
+le.send_reclutas_semanal_email(db, u, xp_semana=7, filas=[("solo", "UBA", 7)])
+check("y con uno solo dice «1 persona», no «1 personas»",
+      "de 1 persona." in enviados[-1]["html"], "de 1 personas" )
 for alias, uni, xp in filas:
     check(f"la fila de @{alias} está", f"@{alias}" in mail["html"] and f"{xp} XP" in mail["html"])
 check("va como tabla y no como flex, que los clientes de correo no soportan",

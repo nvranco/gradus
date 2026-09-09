@@ -681,8 +681,11 @@ def send_reclutas_semanal_email(
 
     name = greeting_name(user)
     unsubscribe_url = f"{_api_base_url()}/email/unsubscribe?token={unsubscribe_token(user.id)}"
-    greeting = f"{name}, esto es lo que sumaron los que trajiste."
-    highlight = f"{xp_semana} XP esta semana, de {len(filas)} personas."
+    greeting = f"{name}, esto es lo que generaron tus reclutas esta semana."
+    # Singular y plural: con un solo recluta el mail decía "de 1 personas", que
+    # es la clase de detalle que hace dudar de si el número está bien.
+    quienes = "1 persona" if len(filas) == 1 else f"{len(filas)} personas"
+    highlight = f"{xp_semana} XP esta semana, de {quienes}."
     html = render_email(
         greeting=greeting,
         highlight=highlight,
@@ -692,7 +695,7 @@ def send_reclutas_semanal_email(
         preview=greeting,
         rows=[(f"@{alias}", uni or "", f"{xp} XP") for alias, uni, xp in filas],
     )
-    asunto = f"Tus reclutas te dieron {xp_semana} XP esta semana 🪖"
+    asunto = f"Tus reclutas generaron {xp_semana} XP esta semana 🪖"
     return _send(user.email, asunto, html, unsubscribe_url, text=f"{greeting} {highlight}")
 
 
