@@ -75,6 +75,27 @@ es la mecánica que gobierna la experiencia entera:
   el piso como Elo de desbloqueo de la fila, así que la promesa de la pantalla y
   lo que el generador hace son el mismo número.
 
+### Los dos pedidos de la pantalla de inicio (`pedido-instalar.tsx`, `pedido-notificaciones.tsx`)
+
+Dos diapos que interrumpen la partida, en ese orden y no en otro: en iOS el push
+web **no existe** fuera de la app instalada, así que instalar es el
+prerrequisito de notificar.
+
+- **Instalar** sale en la derivada 5 y vuelve en la 25 y en la 45, tres veces
+  como máximo. El número sale de la curva de supervivencia real: en la 5 sigue el
+  46% de la cohorte y en la 15 el 10%, y la 5 es además el punto más calmo del
+  tramo (8,3% de abandono contra 25% en la 3). Es el único pedido que **no**
+  consume el cooldown compartido, porque es el único que no le pide nada a la
+  persona; si eso cambia, entra al cooldown como los otros.
+- **Recordatorios** sale solo dentro de la app instalada, a las 3 derivadas
+  hechas desde que se instaló —no desde el total: quien instaló en la 30 no puede
+  esperar hasta la 50— y vuelve cada 20, tres veces. Sí consume el cooldown, y
+  tiene cuenta regresiva antes de poder saltearlo: pide un permiso del sistema,
+  que se quema para siempre si dicen que no.
+- Los dos se apagan solos cuando la persona acciona: `isStandalone()` para el
+  primero y `Notification.permission !== "default"` para el segundo, sin marcador
+  que mantener.
+
 ### Avisos del minijuego (`game/notifications.py`, `game/notification_copy.py`)
 
 Canal propio de push, porque el de Intervalo no le llega: `push_subscriptions`
