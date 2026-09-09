@@ -1722,6 +1722,11 @@ export interface components {
              * @default 0
              */
             reclutas_sent: number;
+            /**
+             * Winback Dx Sent
+             * @default 0
+             */
+            winback_dx_sent: number;
         };
         /** EmojiStateResponse */
         EmojiStateResponse: {

@@ -53,7 +53,7 @@ from sqlalchemy.orm import Session as DBSession
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from algorithm import STREAK_TIERS
-from models import ExerciseFeedback, Session as SessionModel, User
+from models import ExerciseFeedback, GamePlayer, Session as SessionModel, User
 
 BOUNCE_MIN_ACCOUNT_AGE = timedelta(hours=24)
 WINBACK_INACTIVITY = timedelta(days=5)
@@ -133,11 +133,26 @@ def greeting_name(user: User) -> str:
 # ── Selección de destinatarios ───────────────────────────────────────────────
 
 def due_bounce_emails(db: DBSession) -> list[User]:
-    """Usuarios registrados hace 24h+ que nunca terminaron una sesión."""
+    """Usuarios registrados hace 24h+ que nunca terminaron una sesión NI jugaron.
+
+    El «ni jugaron» es lo que se agregó, y arregla un mail que estaba mintiendo:
+    la condición era solo «ninguna sesión de Intervalo terminada», así que TODO
+    usuario que venga del minijuego la cumple para siempre y recibía «Tu cuenta
+    ya está lista… Solo falta tu primera sesión». Esa persona jugó, y a veces
+    cien derivadas.
+
+    No era visible mientras el juego casi no registraba a nadie; con el pedido de
+    registro funcionando pasa a ser la mayoría de las altas nuevas.
+    """
     cutoff = datetime.utcnow() - BOUNCE_MIN_ACCOUNT_AGE
     finished_user_ids = (
         db.query(SessionModel.user_id)
         .filter(SessionModel.finished_at.isnot(None))
+        .distinct()
+    )
+    jugaron = (
+        db.query(GamePlayer.user_id)
+        .filter(GamePlayer.user_id.isnot(None), GamePlayer.exercises_correct > 0)
         .distinct()
     )
     return (
@@ -147,9 +162,50 @@ def due_bounce_emails(db: DBSession) -> list[User]:
             User.bounce_email_sent_at.is_(None),
             User.created_at <= cutoff,
             User.id.notin_(finished_user_ids),
+            User.id.notin_(jugaron),
         )
         .all()
     )
+
+
+# Cuánto silencio en el juego antes de mandar el "volvé".
+#
+# Cinco días, el mismo que el de Intervalo. No es pereza: la mediana de la
+# primera sesión son 3-5 derivadas y casi nadie vuelve por su cuenta, así que la
+# vara no es "cuándo se enfrió" sino "cuándo dejó de ser una molestia escribirle".
+WINBACK_DX_INACTIVITY = timedelta(days=5)
+
+
+def due_winback_dx_emails(db: DBSession) -> list[tuple[User, GamePlayer]]:
+    """Jugadores CON CUENTA que derivaron alguna vez y hace 5 días que no.
+
+    El invitado no entra y no puede entrar: `users.email` es NOT NULL y viene de
+    Clerk, así que a quien juega sin registrarse solo se lo puede alcanzar por
+    push (game/notifications.py).
+
+    El marcador es de `game_players` y no de `users`: son dos productos, y quien
+    dejó de derivar puede seguir estudiando en Intervalo —donde no hay nada que
+    recuperar—. Con un solo marcador, mandar uno apagaba el otro.
+    """
+    cutoff = datetime.utcnow() - WINBACK_DX_INACTIVITY
+    filas = (
+        db.query(User, GamePlayer)
+        .join(GamePlayer, GamePlayer.user_id == User.id)
+        .filter(
+            User.email_unsubscribed.is_(False),
+            GamePlayer.is_bot.is_(False),
+            GamePlayer.exercises_correct > 0,
+            GamePlayer.last_seen_at.isnot(None),
+            GamePlayer.last_seen_at <= cutoff,
+        )
+        .all()
+    )
+    return [
+        (user, jugador)
+        for user, jugador in filas
+        if jugador.winback_email_sent_at is None
+        or jugador.winback_email_sent_at < jugador.last_seen_at
+    ]
 
 
 def due_winback_emails(db: DBSession) -> list[tuple[User, datetime]]:
@@ -415,7 +471,7 @@ def _app_base_url() -> str:
     return os.environ.get("APP_BASE_URL", "https://www.intervalo.xyz")
 
 
-def _cta_url(campaign: str) -> str:
+def _cta_url(campaign: str, path: str = "/") -> str:
     """URL del botón, etiquetada con el tipo de mail que la generó.
 
     Sin esto los cuatro mails apuntan al mismo link pelado y un click es
@@ -427,7 +483,7 @@ def _cta_url(campaign: str) -> str:
     `register_once` (ver web/src/lib/analytics/attribution.ts) y estos mails van
     únicamente a usuarios que ya existen, o sea que ya lo tienen fijado.
     """
-    return f"{_app_base_url()}/?utm_source=email&utm_campaign={campaign}"
+    return f"{_app_base_url()}{path}?utm_source=email&utm_campaign={campaign}"
 
 
 def _api_base_url() -> str:
@@ -524,6 +580,31 @@ def send_winback_email(db: DBSession, user: User) -> bool:
     sent = _send(user.email, f"¡Volvé {name}! 👀", html, unsubscribe_url, text=f"{greeting} {highlight}")
     if sent:
         user.winback_email_sent_at = datetime.utcnow()
+        db.commit()
+    return sent
+
+
+def send_winback_dx_email(db: DBSession, user: User, jugador: GamePlayer) -> bool:
+    """El "volvé" del minijuego. Mismo andamio que el de Intervalo —layout, logo,
+    baja de un clic— y otro copy, porque lo que se dejó atrás es otra cosa: acá
+    no hay temas por repasar, hay un puesto que se está perdiendo."""
+    name = greeting_name(user)
+    unsubscribe_url = f"{_api_base_url()}/email/unsubscribe?token={unsubscribe_token(user.id)}"
+    greeting = f"{name}, tus derivadas te extrañan."
+    highlight = "Volvé y recuperá tu puesto."
+    html = render_email(
+        greeting=greeting,
+        highlight=highlight,
+        cta_label="Volver",
+        cta_url=_cta_url("winback_dx", path="/derivadas"),
+        unsubscribe_url=unsubscribe_url,
+    )
+    sent = _send(
+        user.email, f"¡Volvé a derivar {name}! 👀", html, unsubscribe_url,
+        text=f"{greeting} {highlight}",
+    )
+    if sent:
+        jugador.winback_email_sent_at = datetime.utcnow()
         db.commit()
     return sent
 
@@ -792,7 +873,6 @@ def due_reclutas_semanal_emails(db: DBSession) -> list[ResumenDeReclutas]:
     `referral_xp_email_seen`, que se mueve recién cuando el mail sale.
     """
     import xp_boost
-    from models import GamePlayer
 
     hoy = datetime.utcnow().date()
     hace_una_semana = hoy - timedelta(days=7)
@@ -865,6 +945,11 @@ def run_lifecycle_emails(db: DBSession) -> dict:
         if send_winback_email(db, user):
             winback_sent += 1
 
+    winback_dx_sent = 0
+    for user, jugador in due_winback_dx_emails(db):
+        if send_winback_dx_email(db, user, jugador):
+            winback_dx_sent += 1
+
     streak_tier_sent = 0
     to_send, to_mark = due_streak_tier_emails(db)
     for user, tier in to_mark:
@@ -905,6 +990,7 @@ def run_lifecycle_emails(db: DBSession) -> dict:
     return {
         "bounce_sent": bounce_sent,
         "winback_sent": winback_sent,
+        "winback_dx_sent": winback_dx_sent,
         "streak_tier_sent": streak_tier_sent,
         "report_thanks_sent": report_thanks_sent,
         "cafecito_efecto_sent": cafecito_efecto_sent,

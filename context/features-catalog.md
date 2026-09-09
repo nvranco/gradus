@@ -99,6 +99,14 @@ copy sale de tablas que el juego no toca.
   por Elo promedio (que es lo que impide que un cafecito compre puesto), así que
   ningún aviso puede prometer XP para escalar la tabla de universidades.
 
+**Mails** (solo para quien tiene cuenta: `users.email` viene de Clerk, así que al
+invitado solo se lo alcanza por push). Se reusan los dos que ya eran conscientes
+del juego —el resumen semanal de reclutas y el efecto del cafecito— y se agrega
+el **"volvé" del minijuego**: cinco días sin derivar, uno por ausencia, con
+marcador propio en `game_players` porque quien dejó el juego puede seguir
+estudiando en Intervalo. Se descartan los de racha y de gracias-por-reportar,
+que miran tablas que el juego no tiene.
+
 ## Misceláneo
 
 - Splash animado con colores de belt al cargar (`splash-context.tsx`/`splash-gate.tsx`).
