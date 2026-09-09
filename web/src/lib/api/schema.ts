@@ -519,6 +519,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/game/derivemos/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Game Push Subscribe
+         * @description Guarda el navegador y devuelve las preferencias, para no pedirlas aparte.
+         */
+        post: operations["game_push_subscribe_game_derivemos_push_subscribe_post"];
+        /** Game Push Unsubscribe */
+        delete: operations["game_push_unsubscribe_game_derivemos_push_subscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/game/derivemos/notification-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Game Get Notification Settings */
+        get: operations["game_get_notification_settings_game_derivemos_notification_settings_get"];
+        /**
+         * Game Put Notification Settings
+         * @description Prender o apagar los avisos y elegir a qué hora.
+         *
+         *     Las mismas validaciones que en Intervalo —y por eso el mismo formato de
+         *     hora—: la franja de quince minutos es la que compara el resolutor, y un huso
+         *     inválido rompería el tick de todas las noches, no el pedido de esta persona.
+         */
+        put: operations["game_put_notification_settings_game_derivemos_notification_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -972,6 +1018,80 @@ export interface paths {
          *     exitoso.
          */
         post: operations["internal_push_delivery_internal_push_delivery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/notifications/game": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Internal Due Game Notifications
+         * @description Worker-facing: el aviso programado del juego, reclamado en la transacción.
+         */
+        get: operations["internal_due_game_notifications_internal_notifications_game_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/notifications/game-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Internal Due Game Event Notifications
+         * @description Worker-facing: los avisos reactivos del juego (cafecito, reclutas, ranking).
+         */
+        get: operations["internal_due_game_event_notifications_internal_notifications_game_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/push/game-prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Internal Prune Game Push */
+        post: operations["internal_prune_game_push_internal_push_game_prune_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/push/game-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Internal Game Push Delivery */
+        post: operations["internal_game_push_delivery_internal_push_game_delivery_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1539,6 +1659,34 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * DueGameNotification
+         * @description Un aviso del minijuego listo para mandar.
+         *
+         *     Misma forma que `DueNotification` salvo dos campos, y las dos diferencias
+         *     tienen motivo. `player_id` en vez de `user_id` porque el destinatario puede
+         *     ser un invitado, que no tiene fila en `users` —que es justamente el caso que
+         *     este canal existe para cubrir—. Y `url` porque son dos apps instaladas: sin
+         *     decirlo, el service worker abre la home de Intervalo (tiene `"/"`
+         *     hardcodeado) y el tap lleva al producto equivocado.
+         *
+         *     No lleva `pending_count`: ese número son los repasos SM-2 que la persona
+         *     tiene vencidos, y el juego no tiene repasos.
+         */
+        DueGameNotification: {
+            /** Player Id */
+            player_id: number;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Notification Id */
+            notification_id: number;
+            /** Url */
+            url: string;
+            /** Subscriptions */
+            subscriptions: components["schemas"]["PushSubscriptionOut"][];
+        };
         /** DueNotification */
         DueNotification: {
             /** User Id */
@@ -1980,6 +2128,24 @@ export interface components {
             /** Seconds Ago */
             seconds_ago: number;
         };
+        /** GameNotificationSettings */
+        GameNotificationSettings: {
+            /** Enabled */
+            enabled: boolean;
+            /** Time */
+            time?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+        };
+        /** GameNotificationSettingsRequest */
+        GameNotificationSettingsRequest: {
+            /** Enabled */
+            enabled: boolean;
+            /** Time */
+            time?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+        };
         /** GamePlayerCreateRequest */
         GamePlayerCreateRequest: {
             /** Group Id */
@@ -2064,6 +2230,24 @@ export interface components {
              * @default []
              */
             boosts: components["schemas"]["GameBoostOut"][];
+        };
+        /** GamePushKeys */
+        GamePushKeys: {
+            /** P256Dh */
+            p256dh: string;
+            /** Auth */
+            auth: string;
+        };
+        /** GamePushSubscribeRequest */
+        GamePushSubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
+            keys: components["schemas"]["GamePushKeys"];
+        };
+        /** GamePushUnsubscribeRequest */
+        GamePushUnsubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
         };
         /**
          * GameRecruitEntry
@@ -3543,6 +3727,146 @@ export interface operations {
             };
         };
     };
+    game_push_subscribe_game_derivemos_push_subscribe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+                "x-game-token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GamePushSubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameNotificationSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    game_push_unsubscribe_game_derivemos_push_subscribe_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+                "x-game-token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GamePushUnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameNotificationSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    game_get_notification_settings_game_derivemos_notification_settings_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+                "x-game-token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameNotificationSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    game_put_notification_settings_game_derivemos_notification_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+                "x-game-token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameNotificationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameNotificationSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_check_health_get: {
         parameters: {
             query?: never;
@@ -4095,6 +4419,7 @@ export interface operations {
                 raw_len?: string | null;
                 ua?: string | null;
                 notification_id?: number | null;
+                app?: string | null;
             };
             header?: never;
             path?: never;
@@ -4290,6 +4615,142 @@ export interface operations {
         };
     };
     internal_push_delivery_internal_push_delivery_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushDeliveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    internal_due_game_notifications_internal_notifications_game_get: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueGameNotification"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    internal_due_game_event_notifications_internal_notifications_game_events_get: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueGameNotification"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    internal_prune_game_push_internal_push_game_prune_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrunePushRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    internal_game_push_delivery_internal_push_game_delivery_post: {
         parameters: {
             query?: never;
             header?: {

@@ -220,6 +220,28 @@ class DueNotification(BaseModel):
     subscriptions: list[PushSubscriptionOut]
 
 
+class DueGameNotification(BaseModel):
+    """Un aviso del minijuego listo para mandar.
+
+    Misma forma que `DueNotification` salvo dos campos, y las dos diferencias
+    tienen motivo. `player_id` en vez de `user_id` porque el destinatario puede
+    ser un invitado, que no tiene fila en `users` —que es justamente el caso que
+    este canal existe para cubrir—. Y `url` porque son dos apps instaladas: sin
+    decirlo, el service worker abre la home de Intervalo (tiene `"/"`
+    hardcodeado) y el tap lleva al producto equivocado.
+
+    No lleva `pending_count`: ese número son los repasos SM-2 que la persona
+    tiene vencidos, y el juego no tiene repasos.
+    """
+
+    player_id: int
+    title: str
+    body: str
+    notification_id: int
+    url: str
+    subscriptions: list[PushSubscriptionOut]
+
+
 # ── Leaderboard ───────────────────────────────────────────────────────────────
 
 class LeaderboardEntry(BaseModel):

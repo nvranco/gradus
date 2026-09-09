@@ -164,6 +164,15 @@ def link_guest_to_user(db: Session, guest: GamePlayer, user: User) -> GamePlayer
         # El token pertenece a otro usuario registrado: no se transfiere.
         raise HTTPException(status_code=409, detail="Ese progreso ya pertenece a otra cuenta.")
 
+    # Los avisos que la persona configuró de invitada se mudan a su cuenta antes
+    # de que el jugador deje de ser el titular del cupo: a partir de acá el
+    # resolutor lee las preferencias de `users` (ver
+    # game/notifications.py :: titular_del_cupo), así que sin esto registrarse
+    # apagaría en silencio los recordatorios que acababa de prender.
+    from . import notifications as avisos
+
+    avisos.copiar_preferencias_al_usuario(guest, user)
+
     existing = db.query(GamePlayer).filter(GamePlayer.user_id == user.id).first()
     if existing is None:
         guest.user_id = user.id

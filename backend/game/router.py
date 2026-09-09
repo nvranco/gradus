@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import and_ as sa_and, case, func, or_ as sa_or
@@ -50,6 +50,10 @@ from .deps import (
 from .generator import get_or_create_stat, serve_exercise, template_for
 from .mathjson import MathJsonError, to_sympy
 from .schemas import (
+    GameNotificationSettings,
+    GameNotificationSettingsRequest,
+    GamePushSubscribeRequest,
+    GamePushUnsubscribeRequest,
     GameAnswerRequest,
     GameAnswerResponse,
     GameBoostOut,
@@ -1857,3 +1861,79 @@ def record_cta(
     )
     db.commit()
     return None
+
+
+# ── Avisos push ──────────────────────────────────────────────────────────────
+#
+# Los gemelos de `/push/subscribe` y `/user/notification-settings` de Intervalo,
+# pero autenticados con `get_current_player`, que resuelve tanto al invitado por
+# su `X-Game-Token` como al registrado por Clerk. Esa es toda la diferencia y es
+# la que importa: aquellos piden sesión, y entre el 50% y el 95% de cada cohorte
+# del juego no tiene cuenta.
+
+_HORA_RE = re.compile(r"^([01]\d|2[0-3]):(00|15|30|45)$")
+
+
+@router.post("/push/subscribe", response_model=GameNotificationSettings)
+def game_push_subscribe(
+    body: GamePushSubscribeRequest,
+    player: GamePlayer = Depends(get_current_player),
+    db: Session = Depends(get_db),
+):
+    """Guarda el navegador y devuelve las preferencias, para no pedirlas aparte."""
+    from . import notifications as avisos
+
+    avisos.upsert_subscription(
+        db, player, body.endpoint, body.keys.p256dh, body.keys.auth
+    )
+    return avisos.get_settings(player)
+
+
+@router.delete("/push/subscribe", response_model=GameNotificationSettings)
+def game_push_unsubscribe(
+    body: GamePushUnsubscribeRequest,
+    player: GamePlayer = Depends(get_current_player),
+    db: Session = Depends(get_db),
+):
+    from . import notifications as avisos
+
+    avisos.delete_subscription(db, player, body.endpoint)
+    return avisos.get_settings(player)
+
+
+@router.get("/notification-settings", response_model=GameNotificationSettings)
+def game_get_notification_settings(
+    player: GamePlayer = Depends(get_current_player),
+):
+    from . import notifications as avisos
+
+    return avisos.get_settings(player)
+
+
+@router.put("/notification-settings", response_model=GameNotificationSettings)
+def game_put_notification_settings(
+    body: GameNotificationSettingsRequest,
+    player: GamePlayer = Depends(get_current_player),
+    db: Session = Depends(get_db),
+):
+    """Prender o apagar los avisos y elegir a qué hora.
+
+    Las mismas validaciones que en Intervalo —y por eso el mismo formato de
+    hora—: la franja de quince minutos es la que compara el resolutor, y un huso
+    inválido rompería el tick de todas las noches, no el pedido de esta persona.
+    """
+    from . import notifications as avisos
+
+    if body.enabled:
+        if not body.time or not _HORA_RE.match(body.time):
+            raise HTTPException(status_code=400, detail="time must be HH:MM in 15-min steps")
+        if not body.timezone:
+            raise HTTPException(status_code=400, detail="timezone is required")
+        try:
+            ZoneInfo(body.timezone)
+        except ZoneInfoNotFoundError:
+            raise HTTPException(status_code=400, detail="invalid timezone")
+
+    return avisos.save_settings(
+        db, player, enabled=body.enabled, time=body.time, timezone=body.timezone
+    )

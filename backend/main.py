@@ -48,6 +48,7 @@ from models import User, Enrollment, Answer, GamePlayer, UnitState
 from sqlalchemy import and_ as sa_and, case, func, or_ as sa_or, select
 from sqlalchemy.exc import IntegrityError
 from schemas import (
+    DueGameNotification,
     BoostTramo,
     RecruitEntry,
     RecruitsResponse,
@@ -984,6 +985,11 @@ def push_diagnostic_beacon(
     raw_len: str | None = None,
     ua: str | None = None,
     notification_id: int | None = None,
+    # De qué producto viene el aviso. "dx" = minijuego, cualquier otra cosa =
+    # Intervalo. Hace falta porque los envíos del juego viven en su propia tabla
+    # con su propio espacio de ids: sin este campo, un click en un aviso de dx
+    # marcaría como abierta la fila de otra persona en `notification_sends`.
+    app: str | None = None,
     db: Session = Depends(get_db),
 ):
     """GET twin of push_diagnostic, reporting on EVERY push the service
@@ -1013,7 +1019,14 @@ def push_diagnostic_beacon(
     )
     if event == "click" and notification_id is not None:
         try:
-            push_store.mark_notification_opened(notification_id, endpoint, db)
+            if app == "dx":
+                from game import notifications as avisos_del_juego
+
+                avisos_del_juego.mark_notification_opened(
+                    db, notification_id, endpoint or ""
+                )
+            else:
+                push_store.mark_notification_opened(notification_id, endpoint, db)
         except Exception:
             logging.exception("failed to mark notification %s opened", notification_id)
     return {"success": True}
@@ -1121,6 +1134,80 @@ def internal_push_delivery(
     import push_store
 
     push_store.record_delivery_results(
+        db, [(r.notification_id, r.status) for r in body.results]
+    )
+    return {"success": True}
+
+
+# ── Avisos del minijuego ─────────────────────────────────────────────────────
+#
+# Cuatro endpoints propios en vez de reusar los de arriba, y no es simetría
+# gratuita: las filas del juego viven en `game_notification_sends` y
+# `game_push_subscriptions`, con su propio espacio de ids. Con un solo endpoint
+# de entrega, un `notification_id` podría referirse a dos filas distintas según
+# de qué tanda viniera.
+#
+# La FORMA de la respuesta sí es la misma, y eso es lo que permite que el
+# notifier use la misma `correrTanda` para las cuatro rutas.
+
+
+@app.get(
+    "/internal/notifications/game",
+    response_model=list[DueGameNotification],
+    dependencies=[Depends(require_internal_secret)],
+)
+def internal_due_game_notifications(
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Worker-facing: el aviso programado del juego, reclamado en la transacción."""
+    from game import notifications as avisos
+
+    return avisos.due_game_notifications(db, force=force)
+
+
+@app.get(
+    "/internal/notifications/game-events",
+    response_model=list[DueGameNotification],
+    dependencies=[Depends(require_internal_secret)],
+)
+def internal_due_game_event_notifications(
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Worker-facing: los avisos reactivos del juego (cafecito, reclutas, ranking)."""
+    from game import notifications as avisos
+
+    return avisos.due_game_event_notifications(db, force=force)
+
+
+@app.post(
+    "/internal/push/game-prune",
+    response_model=SimpleResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
+def internal_prune_game_push(
+    body: PrunePushRequest,
+    db: Session = Depends(get_db),
+):
+    from game import notifications as avisos
+
+    avisos.delete_subscriptions_by_id(db, body.subscription_ids)
+    return {"success": True}
+
+
+@app.post(
+    "/internal/push/game-delivery",
+    response_model=SimpleResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
+def internal_game_push_delivery(
+    body: PushDeliveryRequest,
+    db: Session = Depends(get_db),
+):
+    from game import notifications as avisos
+
+    avisos.record_delivery_results(
         db, [(r.notification_id, r.status) for r in body.results]
     )
     return {"success": True}
