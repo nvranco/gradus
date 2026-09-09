@@ -6,6 +6,8 @@ const CAFECITO_LAST_KEY = "intervalo:game:cafecito-last"
 const CAFECITO_VISTOS_KEY = "intervalo:game:cafecito-vistos"
 const REGISTRO_OFRECIDO_KEY = "intervalo:game:registro-ofrecido"
 const INSTALAR_KEY = "intervalo:game:instalar"
+const NOTIF_KEY = "intervalo:game:notificaciones"
+const PWA_DESDE_KEY = "intervalo:game:pwa-desde"
 
 // El token del invitado se lee además como STORE REACTIVO (`subscribeGameToken`
 // + `getGameTokenSnapshot`, que consume `useGameToken` en UseGamePlayer.ts).
@@ -85,6 +87,8 @@ export function clearGameIdentity() {
     window.localStorage.removeItem(CAFECITO_VISTOS_KEY)
     window.localStorage.removeItem(REGISTRO_OFRECIDO_KEY)
     window.localStorage.removeItem(INSTALAR_KEY)
+    window.localStorage.removeItem(NOTIF_KEY)
+    window.localStorage.removeItem(PWA_DESDE_KEY)
     window.localStorage.removeItem(CHAT_SENDS_KEY)
   } catch {
     // Nada que limpiar si tampoco se pudo escribir.
@@ -214,31 +218,39 @@ export function registrarEnvio(at: number, ventanaMs: number) {
   } catch {}
 }
 
-// Cuántas veces se ofreció agregar el juego a la pantalla de inicio, y en qué
-// derivada fue la última.
+// Cuántas veces se ofreció algo que se REPITE, y en qué derivada fue la última.
 //
-// Son DOS números y no uno porque el pedido se repite: vuelve cada
-// `INSTALAR_CADA` derivadas mientras la persona no haya instalado, con un tope
-// de `INSTALAR_MAX` apariciones. Con un solo marcador —como el del registro— no
-// hay forma de dejar de insistir, y un pedido que vuelve para siempre deja de
-// ser un pedido.
+// Son DOS números y no uno porque estos pedidos vuelven: cada tantas derivadas
+// mientras la persona no haya accionado, con un tope de apariciones. Con un solo
+// marcador —como el del registro— no hay forma de dejar de insistir, y un pedido
+// que vuelve para siempre deja de ser un pedido.
 //
 // Un solo valor JSON en vez de dos claves: se leen y se escriben siempre juntos,
 // y dos claves permiten el estado imposible de tener cuenta sin última.
 //
 // Cualquier cosa ilegible cuenta como "nunca se ofreció". Peor caso, alguien ve
-// los pasos de instalación una vez de más — que es el lado hacia el que conviene
-// errar, porque el otro es no ofrecérselo nunca a quien sí lo quería.
-export type PedidoInstalar = { vistas: number; ultima: number }
+// el pedido una vez de más — que es el lado hacia el que conviene errar, porque
+// el otro es no ofrecérselo nunca a quien sí lo quería.
+export type PedidoRepetido = { vistas: number; ultima: number }
 
-const SIN_PEDIR: PedidoInstalar = { vistas: 0, ultima: -Infinity }
+/** Los dos pedidos que se repiten, cada uno con su cuenta propia.
+ *
+ * Separados a propósito: el de la pantalla de inicio y el de los recordatorios
+ * son escalones distintos del mismo camino —hay que instalar para poder
+ * notificar— así que compartir el contador significaría que quien vio uno nunca
+ * llega al otro. Es exactamente el motivo por el que Intervalo lleva dos
+ * contextos en `notify-hint-seen.ts`. */
+export const PEDIDO_INSTALAR = INSTALAR_KEY
+export const PEDIDO_NOTIFICACIONES = NOTIF_KEY
 
-export function readInstalarState(): PedidoInstalar {
+const SIN_PEDIR: PedidoRepetido = { vistas: 0, ultima: -Infinity }
+
+export function readPedidoState(clave: string): PedidoRepetido {
   if (typeof window === "undefined") return SIN_PEDIR
   try {
-    const raw = window.localStorage.getItem(INSTALAR_KEY)
+    const raw = window.localStorage.getItem(clave)
     if (raw === null) return SIN_PEDIR
-    const v = JSON.parse(raw) as Partial<PedidoInstalar>
+    const v = JSON.parse(raw) as Partial<PedidoRepetido>
     if (typeof v?.vistas !== "number" || typeof v?.ultima !== "number") {
       return SIN_PEDIR
     }
@@ -248,8 +260,35 @@ export function readInstalarState(): PedidoInstalar {
   }
 }
 
-export function saveInstalarState(estado: PedidoInstalar) {
+export function savePedidoState(clave: string, estado: PedidoRepetido) {
   try {
-    window.localStorage.setItem(INSTALAR_KEY, JSON.stringify(estado))
+    window.localStorage.setItem(clave, JSON.stringify(estado))
   } catch {}
+}
+
+// En qué derivada esta persona empezó a jugar desde la app instalada.
+//
+// El pedido de recordatorios se cuenta desde ACÁ y no desde el total: quien
+// instaló en la derivada 30 ya demostró todo lo que había que demostrar, y
+// hacerlo esperar hasta la 50 para ofrecerle lo único que puede traerlo de vuelta
+// es perder a la persona más comprometida del embudo.
+//
+// Se escribe una sola vez, la primera vez que se detecta la app instalada.
+export function readPwaDesde(): number | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(PWA_DESDE_KEY)
+    return raw === null ? null : Number(raw)
+  } catch {
+    return null
+  }
+}
+
+export function marcarPwaDesde(totalCorrectas: number): number {
+  const ya = readPwaDesde()
+  if (ya !== null) return ya
+  try {
+    window.localStorage.setItem(PWA_DESDE_KEY, String(totalCorrectas))
+  } catch {}
+  return totalCorrectas
 }

@@ -20,8 +20,14 @@ import {
   INSTALAR_MAX,
   INSTALAR_PRIMERA,
   INSTALAR_SEPARACION,
+  NOTIF_CADA,
+  NOTIF_MAX,
+  NOTIF_PRIMERA,
+  NOTIF_SEPARACION,
   marcarInstalarMostrado,
+  marcarNotificacionesMostrado,
   tocaInstalar,
+  tocaNotificaciones,
 } from "../src/app/derivadas/instalacion-trigger"
 import {
   RECLUTAS_CADA,
@@ -149,7 +155,57 @@ check(
   "y nunca dos en la misma respuesta",
 )
 
-console.log("5. un localStorage roto no lo apaga")
+console.log("5. los recordatorios se cuentan desde que instaló")
+limpio()
+// Alguien que instaló en la derivada 30: la cadencia arranca ahí y no en el
+// total, así que el pedido le llega en la 33 y no cuando el total llegue a 3.
+const DESDE = 30
+const conRecordatorios: number[] = []
+for (let n = DESDE; n <= DESDE + 100; n++) {
+  if (tocaNotificaciones({ enPwa: n - DESDE, totalCorrectas: n })) {
+    conRecordatorios.push(n - DESDE)
+    marcarNotificacionesMostrado({ enPwa: n - DESDE, totalCorrectas: n })
+  }
+}
+check(
+  conRecordatorios[0] === NOTIF_PRIMERA,
+  `el primero llega a las ${NOTIF_PRIMERA} derivadas en la app (${conRecordatorios[0]})`,
+)
+check(
+  conRecordatorios.length === NOTIF_MAX,
+  `sale ${NOTIF_MAX} veces y no más (${conRecordatorios.length})`,
+)
+check(
+  conRecordatorios.every((n, i) => i === 0 || n - conRecordatorios[i - 1]! === NOTIF_CADA),
+  `separados por ${NOTIF_CADA} (${conRecordatorios.join(", ")})`,
+)
+limpio()
+check(
+  !tocaNotificaciones({ enPwa: NOTIF_PRIMERA - 1, totalCorrectas: 100 }),
+  "y no sale antes, por más total que tenga",
+)
+
+console.log("6. los recordatorios SÍ respetan el peaje compartido")
+// Al revés que el de instalar: pedir un permiso del sistema es pedir algo, y al
+// lado de un cafecito se lee como dos peajes seguidos.
+limpio()
+saveUltimoPedidoAt(100)
+check(
+  !tocaNotificaciones({ enPwa: 50, totalCorrectas: 100 + NOTIF_SEPARACION - 1 }),
+  "pegado a otro pedido no sale",
+)
+check(
+  tocaNotificaciones({ enPwa: 50, totalCorrectas: 100 + NOTIF_SEPARACION }),
+  "y con el cooldown cumplido sí",
+)
+check(
+  readUltimoPedidoAt() === 100,
+  "mientras no lo muestre, no consume el turno de nadie",
+)
+marcarNotificacionesMostrado({ enPwa: 50, totalCorrectas: 120 })
+check(readUltimoPedidoAt() === 120, "y al mostrarse sí lo consume")
+
+console.log("7. un localStorage roto no lo apaga")
 // Safari en modo privado tira al escribir. Peor caso aceptado: se ofrece de más,
 // nunca de menos — el otro lado sería no ofrecérselo nunca a quien sí lo quería.
 limpio()

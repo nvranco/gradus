@@ -53,8 +53,16 @@ import {
 import { CafecitoPanel, CAFE } from "./cafecito-panel"
 import { ReclutasPanel, type ReclutasTrigger } from "./reclutas-panel"
 import { ConSalidaAbajo } from "./slide-salida"
-import { marcarInstalarMostrado, tocaInstalar } from "./instalacion-trigger"
+import {
+  marcarInstalarMostrado,
+  marcarNotificacionesMostrado,
+  tocaInstalar,
+  tocaNotificaciones,
+} from "./instalacion-trigger"
 import { PedidoInstalar, puedeOfrecerInstalar } from "./pedido-instalar"
+import { PedidoNotificaciones } from "./pedido-notificaciones"
+import { puedeOfrecerNotificaciones } from "./UseAvisosDelJuego"
+import { marcarPwaDesde } from "./game-storage"
 import { marcarReclutasMostrado, tocaReclutar } from "./reclutas-trigger"
 import {
   HITO_PERFIL,
@@ -148,6 +156,10 @@ type Slide =
   // cabecera ni atajo—, así que siempre llega después de responder y lo que
   // sigue es la derivada siguiente.
   | { kind: "instalar" }
+  // Los recordatorios. Solo aparece dentro de la app instalada, así que es el
+  // escalón siguiente al de arriba y no una alternativa: en iOS el push web no
+  // existe fuera de la pantalla de inicio.
+  | { kind: "notificaciones" }
 
 // El tinte de fondo de café/reclutas, de pantalla completa (ver el `motion.div`
 // debajo de la grilla, más abajo). Antes vivía adentro de la caja de la propia
@@ -528,6 +540,7 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
         | "cafecito"
         | "reclutas"
         | "instalar"
+        | "notificaciones"
         | null,
     ) => {
       const pending = pendingRef.current
@@ -651,6 +664,24 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
         marcarInstalarMostrado(totalCorrectas)
         goTo({ kind: "instalar" })
         return
+      }
+      // Y adentro de la app instalada, los recordatorios. La cadencia se cuenta
+      // desde que se instaló y no desde el total: quien instaló en la derivada
+      // 30 ya demostró todo lo que había que demostrar, y hacerlo esperar hasta
+      // la 50 es perder a la persona más comprometida del embudo.
+      //
+      // `marcarPwaDesde` escribe una sola vez, la primera que se detecta la app
+      // instalada, y devuelve ese número siempre.
+      if (consumed !== "notificaciones" && puedeOfrecerNotificaciones()) {
+        const desde = marcarPwaDesde(totalCorrectas)
+        if (tocaNotificaciones({ enPwa: totalCorrectas - desde, totalCorrectas })) {
+          marcarNotificacionesMostrado({
+            enPwa: totalCorrectas - desde,
+            totalCorrectas,
+          })
+          goTo({ kind: "notificaciones" })
+          return
+        }
       }
       // Sin universidad no se marca el cooldown: el cafecito no se mostró, así
       // que no gastó su turno y vuelve en el próximo hito, ya con una
@@ -1778,6 +1809,22 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
                         advanceAfterAnswer("reclutas")
                       else goTo(slide.back ?? { kind: "exercise" }, "atras")
                     }}
+                    fullBleed
+                    className="flex-none"
+                  />
+                )}
+              </ConSalidaAbajo>
+            </div>
+          )}
+
+          {slide.kind === "notificaciones" && (
+            <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-5 pb-[var(--cta-pb)] pt-4">
+              <ConSalidaAbajo>
+                {({ salida, accion }) => (
+                  <PedidoNotificaciones
+                    slotSalida={salida}
+                    slotAccion={accion}
+                    onContinue={() => advanceAfterAnswer("notificaciones")}
                     fullBleed
                     className="flex-none"
                   />
