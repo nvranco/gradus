@@ -21,9 +21,17 @@ panel en un generador de números lindos:
     `SESSION_GAP_MINUTES`. El juego no tiene un objeto «sesión» —se entra por un
     link y se juega hasta que uno se cansa— así que la sesión se reconstruye por
     huecos, que es la única definición disponible y hay que decirlo en voz alta.
-  - **Partida cerrada** = sin actividad en las últimas `CLOSED_AFTER_HOURS`
-    horas. Es la única que entra en la curva de profundidad: quien está jugando
-    ahora todavía puede sumar derivadas.
+  - **Partida** = la PRIMERA sesión de un estudiante, y nada más. Es lo que
+    mide la curva de profundidad. Antes era su vida entera, y eso tenía dos
+    costos: había que esperar 24 h de silencio para leerla —la cohorte de la
+    semana en curso quedaba vacía todo el día— y la curva de una cohorte vieja
+    seguía moviéndose para siempre, porque alguien de agosto que vuelve en
+    octubre cambia la mediana de agosto. Una cohorte cerrada tiene que ser un
+    hecho, no un número móvil.
+  - **Partida cerrada** = su primera sesión ya no puede crecer, o sea que pasó
+    más de `SESSION_GAP_MINUTES` desde la última respuesta de esa tanda. Es la
+    única que entra en la curva: quien está jugando ahora todavía puede sumar
+    derivadas, y contarlo hunde la cola por reloj y no por comportamiento.
 
 **Zona horaria.** Igual que el panel de Intervalo: columnas naive en UTC, el día
 del negocio es el de Argentina, todo pasa por `local_date()`. Semanas de lunes a
@@ -99,12 +107,6 @@ def clamp_week(w: date) -> date:
     """No dejar salir del rango que el panel sabe mostrar."""
     return min(max(w, FIRST_WEEK), week_start(local_date(datetime.utcnow())))
 
-# Una partida se considera CERRADA si el estudiante no respondió nada en las
-# últimas 24 h. La supervivencia se calcula solo sobre partidas cerradas: quien
-# está jugando ahora mismo todavía puede sumar ejercicios, y meterlo en el
-# denominador hunde la cola por reloj y no por comportamiento — el mismo error
-# que ya se corrigió en la retención D+k del panel de Intervalo.
-CLOSED_AFTER_HOURS = 24
 
 def _week_of(dt: datetime | None) -> date | None:
     d = local_date(dt)
@@ -186,14 +188,18 @@ def _in_week(dt: datetime | None, week: date) -> bool:
 
 # ── 0 · Titulares ──────────────────────────────────────────────────────────
 
-def _correctas_de_la_primera_sesion(lista: list[dict]) -> int:
-    """Cuántas acertó alguien en su PRIMERA tanda, cortando en el primer hueco.
+def _primera_sesion(lista: list[dict]) -> list[dict]:
+    """La PRIMERA tanda de un jugador: corta en el primer hueco largo.
 
-    `lista` son las respuestas de un solo jugador en orden —`_answers` ya viene
-    ordenada por (jugador, fecha), así que agruparla alcanza.
+    `lista` son las respuestas de un solo jugador en orden —`_answers` y
+    `_firsts` ya vienen ordenadas por (jugador, fecha), así que agruparlas
+    alcanza—. Es el único lugar donde se decide dónde termina una sesión, y lo
+    usan el titular de la primera sesión y la curva de profundidad: si se
+    partiera en dos, el panel tendría dos definiciones de «sesión» y una de las
+    dos envejecería mal.
     """
     fin = None
-    correctas = 0
+    tanda: list[dict] = []
     for a in lista:
         t = a["created_at"]
         if t is None:
@@ -201,8 +207,13 @@ def _correctas_de_la_primera_sesion(lista: list[dict]) -> int:
         if fin is not None and (t - fin) > timedelta(minutes=SESSION_GAP_MINUTES):
             break
         fin = t
-        correctas += 1 if a["is_correct"] else 0
-    return correctas
+        tanda.append(a)
+    return tanda
+
+
+def _correctas_de_la_primera_sesion(lista: list[dict]) -> int:
+    """Cuántas acertó alguien en su primera tanda."""
+    return sum(1 for a in _primera_sesion(lista) if a["is_correct"])
 
 
 def headline(data: dict, weeks: list[date]) -> list[dict]:
@@ -461,9 +472,24 @@ def profundidad(data: dict, weeks: list[date], now: datetime | None = None,
     de agosto traía 29 partidas cuando la cohorte real eran 13—. Eso no es una
     cohorte: es «todo el mundo, ordenado por otra cosa».
 
-    Solo entran partidas CERRADAS (sin actividad en las últimas
-    `CLOSED_AFTER_HOURS` horas): quien está jugando ahora mismo todavía puede
-    sumar ejercicios, y contarlo hunde la cola por reloj y no por comportamiento.
+    **La partida es la PRIMERA sesión**, no la vida entera del jugador, y está
+    cerrada cuando esa tanda ya no puede crecer: pasaron más de
+    `SESSION_GAP_MINUTES` desde su última respuesta.
+
+    Antes se medía la vida entera y se esperaban 24 h de silencio para leerla.
+    Los datos de producción dicen por qué eso no se arreglaba bajando la espera:
+    los huecos entre derivadas son bimodales —el 97% dura menos de media hora y
+    después no hay nada hasta el día siguiente—, así que entre 3 h y 12 h de
+    espera se gana 0,2 puntos de cobertura. La única mejora real estaba en las
+    24 h, que son justo las que dejaban la semana en curso vacía: 2 partidas
+    legibles contra 62 abiertas.
+
+    Medir la primera sesión cuesta poco y paga dos veces. Cuesta poco porque
+    para el 85% de los jugadores esa tanda ES toda su vida en el juego, y cubre
+    el 79% de las derivadas. Y paga dos veces: la cohorte de hoy se lee en media
+    hora en vez de en un día, y la curva de una cohorte vieja **se congela** —con
+    la vida entera, alguien de agosto que vuelve en octubre movía la mediana de
+    agosto para siempre—.
 
     `corte` agrega líneas, y de dos maneras distintas:
 
@@ -475,23 +501,32 @@ def profundidad(data: dict, weeks: list[date], now: datetime | None = None,
     """
     now = now or datetime.utcnow()
     corte = corte if corte in CORTES else "total"
-    corte_reloj = now - timedelta(hours=CLOSED_AFTER_HOURS)
+    corte_reloj = now - timedelta(minutes=SESSION_GAP_MINUTES)
     semana = weeks[-1]
 
-    por_estudiante = Counter(a["player_id"] for a in data["_firsts"])
+    # La primera tanda de cada uno: cuántas derivadas tiene y cuándo terminó.
+    # Se arma una sola vez para todos los jugadores porque `cohorte` vuelve a
+    # recorrer tres semanas y `universidad`/`aparato` reparten la misma.
+    por_jugador: dict[int, list[dict]] = defaultdict(list)
+    for a in data["_firsts"]:
+        por_jugador[a["player_id"]].append(a)
+    primera_de: dict[int, tuple[int, datetime]] = {}
+    for pid, lista in por_jugador.items():
+        tanda = _primera_sesion(lista)
+        if tanda:
+            primera_de[pid] = (len(tanda), tanda[-1]["created_at"])
 
     def largos_de(w: date) -> tuple[list[dict], list[int]]:
         """Las partidas cerradas de la cohorte de `w`, y su largo."""
         cohorte = [p for p in data["players"]
-                   if _in_week(p["created_at"], w) and por_estudiante.get(p["id"])]
-        cerrados = [p for p in cohorte
-                    if (p["last_seen_at"] or datetime.min) < corte_reloj]
-        return cerrados, [por_estudiante[p["id"]] for p in cerrados]
+                   if _in_week(p["created_at"], w) and p["id"] in primera_de]
+        cerrados = [p for p in cohorte if primera_de[p["id"]][1] < corte_reloj]
+        return cerrados, [primera_de[p["id"]][0] for p in cerrados]
 
     cerrados, largos = largos_de(semana)
     abiertos = sum(1 for p in data["players"]
-                   if _in_week(p["created_at"], semana) and por_estudiante.get(p["id"])
-                   and (p["last_seen_at"] or datetime.min) >= corte_reloj)
+                   if _in_week(p["created_at"], semana) and p["id"] in primera_de
+                   and primera_de[p["id"]][1] >= corte_reloj)
     base = len(largos)
     curva = _curva_de(largos)
 
@@ -526,7 +561,7 @@ def profundidad(data: dict, weeks: list[date], now: datetime | None = None,
         for p in cerrados:
             clave = p["university"] if corte == "universidad" else p["platform"]
             if clave:
-                grupos[clave].append(por_estudiante[p["id"]])
+                grupos[clave].append(primera_de[p["id"]][0])
         vivos = [(k, v) for k, v in grupos.items() if len(v) >= MIN_BASE_SERIE]
         if corte == "universidad":
             vivos.sort(key=lambda kv: -len(kv[1]))
