@@ -70,12 +70,13 @@ jobs:
 
       - name: Checks propios
         working-directory: web
-        # Los cuatro que no necesitan navegador ni servidor. `check:latex` estuvo
+        # Los que no necesitan navegador ni servidor. `check:latex` estuvo
         # sin correr desde que se escribió: se agregó el script y el `bun run`
         # correspondiente, y nada lo llamaba.
         run: |
           bun run check:xp
           bun run check:reclutas
+          bun run check:instalacion
           bun run check:latex
           bun run check:restante
 
