@@ -585,13 +585,22 @@ def send_winback_email(db: DBSession, user: User) -> bool:
 
 
 def send_winback_dx_email(db: DBSession, user: User, jugador: GamePlayer) -> bool:
-    """El "volvé" del minijuego. Mismo andamio que el de Intervalo —layout, logo,
-    baja de un clic— y otro copy, porque lo que se dejó atrás es otra cosa: acá
-    no hay temas por repasar, hay un puesto que se está perdiendo."""
+    """El "volvé" del minijuego: el mismo mail que el de Intervalo, con el link
+    apuntando al juego.
+
+    Mismo asunto, mismo saludo, mismo botón. La única palabra que cambia es
+    "temas" por "derivadas", porque es lo que esa persona dejó atrás.
+
+    Que sean iguales es la decisión, y va contra lo primero que se escribió acá
+    —un asunto propio, «¡Volvé a derivar X!»—: en la bandeja de entrada el
+    remitente es el mismo y la marca es una sola, así que dos asuntos distintos
+    para el mismo mensaje se leen como dos productos peleándose la atención de la
+    misma persona. Lo que tiene que llevar a cada lado es el botón, no el
+    asunto."""
     name = greeting_name(user)
     unsubscribe_url = f"{_api_base_url()}/email/unsubscribe?token={unsubscribe_token(user.id)}"
-    greeting = f"{name}, tus derivadas te extrañan."
-    highlight = "Volvé y recuperá tu puesto."
+    greeting = "Tus derivadas te extrañan y te están sacando puestos en el ranking."
+    highlight = "Recuperalos hoy mismo."
     html = render_email(
         greeting=greeting,
         highlight=highlight,
@@ -600,7 +609,7 @@ def send_winback_dx_email(db: DBSession, user: User, jugador: GamePlayer) -> boo
         unsubscribe_url=unsubscribe_url,
     )
     sent = _send(
-        user.email, f"¡Volvé a derivar {name}! 👀", html, unsubscribe_url,
+        user.email, f"¡Volvé {name}! 👀", html, unsubscribe_url,
         text=f"{greeting} {highlight}",
     )
     if sent:
