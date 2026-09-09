@@ -11,7 +11,7 @@ números lindos:
   - los estudiantes sembrados (`is_bot`) NO cuentan en ninguna métrica;
   - una respuesta que no parsea no es una respuesta: no cuenta como intento ni
     baja el acierto;
-  - la curva de profundidad se calcula solo sobre partidas CERRADAS;
+  - la curva de profundidad mide la PRIMERA SESIÓN y solo las CERRADAS;
   - el desglose reparte a la misma gente en montones: no cambia la base ni el
     largo de ninguna partida.
 
@@ -96,7 +96,7 @@ s.flush()
 # ── Estudiantes ──────────────────────────────────────────────────────────────
 # p1  registrado, UBA, estudiante profundo (12 respuestas), partida CERRADA
 # p2  invitado, UBA, 3 respuestas, partida CERRADA
-# p3  invitado, UTN, 1 respuesta, partida ABIERTA (respondió hace 1 h)
+# p3  invitado, UTN, 1 respuesta, partida ABIERTA (respondió hace 10 min)
 # p4  registrado con cuenta vieja, UTN, 5 respuestas, cerrada
 # p5  de CUATRO semanas antes y vuelve a jugar en esta: el único retenido, y el
 #     único que ya existía cuando la semana empezó —o sea, el denominador de la
@@ -113,7 +113,7 @@ PLAYERS = [
          created_at=T(1, 14), last_seen_at=T(1, 15)),
     dict(id=3, user_id=None, alias="tres", university="UTN", career="S", is_bot=False,
          platform="ios",
-         created_at=T(6, 14), last_seen_at=NOW - timedelta(hours=1)),
+         created_at=T(6, 14), last_seen_at=NOW - timedelta(minutes=10)),
     dict(id=4, user_id=2, alias="cuatro", university="UTN", career="E", is_bot=False,
          platform="android",
          created_at=T(2, 14), last_seen_at=T(2, 15)),
@@ -193,9 +193,10 @@ for i in range(3):
 ex = servir(2, T(3, 14), 0.60, platform="desktop")
 responder(ex, 2, T(3, 14), correcto=True)
 
-# p3: una sola respuesta, y sigue jugando (partida abierta).
-ex = servir(3, NOW - timedelta(hours=1), 0.85)
-responder(ex, 3, NOW - timedelta(hours=1), correcto=True)
+# p3: una sola respuesta hace diez minutos. Su tanda todavía puede crecer, así
+# que la partida está ABIERTA y no entra en la curva.
+ex = servir(3, NOW - timedelta(minutes=10), 0.85)
+responder(ex, 3, NOW - timedelta(minutes=10), correcto=True)
 
 # p4: 5 respuestas, todas correctas, y un salteo de una difícil.
 for i in range(5):
@@ -339,19 +340,33 @@ check("y la cadena no se corta por ellos: «llegó a 25» sigue midiendo contra 
 # ── 5 · Profundidad ──────────────────────────────────────────────────────────
 print("\n— profundidad —")
 pr = q.profundidad(data, weeks, now=NOW)
-# p3 está jugando ahora mismo: su partida NO entra.
+# p3 respondió hace diez minutos: su tanda todavía puede crecer y NO entra.
 check("las partidas abiertas no entran en la curva", pr["base"] == 3, f'(base {pr["base"]})')
 check("y se informa cuántas quedaron afuera", pr["abiertos"] == 1)
 curva = {c["k"]: c for c in pr["curva"]}
 check("S(1) = 100%", curva[1]["pct"] == 100.0)
-# Largos de las partidas cerradas: p1 = 14 (12 + la mirada + la de después del
-# fallo de parseo), p2 = 4, p4 = 5.
-check("S(4) los tiene a los tres", curva[4]["vivos"] == 3, f'({curva[4]["vivos"]})')
-check("S(5) deja afuera a p2", curva[5]["vivos"] == 2, f'({curva[5]["vivos"]})')
+
+# La partida es la PRIMERA TANDA, no la vida entera. p1 respondió 14 veces, pero
+# 10 seguidas a las 14:00 y las otras 4 recién a partir de las 16:00 — dos horas
+# después, o sea otra sentada. Su partida mide 10. p2 respondió 3 el día 1 y una
+# el día 3: mide 3. p4 hizo sus 5 de una. Largos: [10, 3, 5].
+check("la vuelta de otro día no alarga la partida",
+      curva[4]["vivos"] == 2, f'(S(4) = {curva[4]["vivos"]}, y con la vida entera serían 3)')
+check("S(5) los tiene a p1 y p4", curva[5]["vivos"] == 2, f'({curva[5]["vivos"]})')
 check("S(6) deja solo a p1", curva[6]["vivos"] == 1)
-# p1 tiene 14 primeros intentos parseados.
-check("S(15) es cero", curva[15]["vivos"] == 0)
+check("y la segunda sentada de p1 tampoco cuenta",
+      curva[10]["vivos"] == 1 and curva[11]["vivos"] == 0,
+      f'(S(10) = {curva[10]["vivos"]}, S(11) = {curva[11]["vivos"]})')
 check("mediana de derivadas", pr["mediana"] == 5.0, f'({pr["mediana"]})')
+
+# La otra mitad de la regla: una partida abierta se cierra sola media hora
+# después, sin que nadie haga nada. Es lo que hace legible la cohorte del día.
+tarde = q.profundidad(data, weeks, now=NOW + timedelta(hours=1))
+check("media hora después la partida de p3 ya está cerrada",
+      tarde["base"] == 4 and tarde["abiertos"] == 0,
+      f'(base {tarde["base"]}, abiertas {tarde["abiertos"]})')
+check("y entra con el largo de su tanda, que es uno",
+      {c["k"]: c["vivos"] for c in tarde["curva"]}[2] == 3)
 
 # ── 6 · El desglose de la profundidad ──────────────────────────────────────
 print()

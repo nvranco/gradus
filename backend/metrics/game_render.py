@@ -288,16 +288,16 @@ def page(p: dict, *, token: str, seccion: str = SECCION_POR_DEFECTO) -> str:
         2, "Profundidad",
         _box("Cuántos siguen jugando en la derivada k", cuerpo,
              note=resumen + peor_txt + alcance
-                  + "<br><br>Solo entran <b>partidas cerradas</b> (nadie que haya "
-                    "respondido en las últimas 24 h): quien está jugando ahora todavía puede "
-                    "sumar derivadas, y contarlo hundiría la cola por reloj y no por "
-                    f'comportamiento. De esta cohorte quedaron afuera {num(pr["abiertos"])} '
-                    f'partidas abiertas.'
+                  + "<br><br>Una partida es la <b>primera tanda</b> de cada uno —lo que hizo "
+                    "hasta despegarse media hora— y entra recién cuando esa tanda ya no puede "
+                    "crecer: quien está jugando ahora todavía puede sumar derivadas, y "
+                    "contarlo hundiría la cola por reloj y no por comportamiento. De esta "
+                    f'cohorte quedaron afuera {num(pr["abiertos"])} partidas todavía abiertas.'
                     "<br><br>El tramo punteado es donde quedan menos de diez partidas vivas: "
                     "ahí el porcentaje se mueve entero con una persona y no conviene leer la "
                     "forma."),
         sub=f"La misma cohorte del embudo —los que abrieron el juego en la semana del "
-            f"{labels[-1]}— seguida hasta hoy. Es la métrica del juego: el Elo, el ranking y "
+            f"{labels[-1]}—, en su primera sentada. Es la métrica del juego: el Elo, el ranking y "
             f"el cafecito existen para mover esta curva.",
         anchor="profundidad"))
     paneles["profundidad"] = "".join(out)
