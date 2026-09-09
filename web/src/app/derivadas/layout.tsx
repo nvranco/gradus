@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 
+import { appleStartupImages } from "@/lib/ios-splash"
+
 // Metadata propia del minijuego: el link se comparte masivamente por WhatsApp
 // y el preview (title/description/OG) es parte del gancho. La imagen OG la
 // resuelve el archivo opengraph-image.png de esta carpeta.
@@ -47,6 +49,22 @@ export const metadata: Metadata = {
   // El `id` distinto es lo que hace que el navegador las trate como dos apps y
   // no pise una instalación con la otra.
   manifest: "/derivadas.webmanifest",
+  // iOS NO lee el manifest para "Agregar a inicio": se lleva el
+  // `apple-touch-icon` de la página abierta (lo pone apple-icon.tsx) y este
+  // título. Sin esto el juego quedaba en la pantalla de inicio llamándose
+  // "Intervalo", al lado del Intervalo de verdad y con el mismo nombre.
+  //
+  // Va el objeto entero y no solo `title` porque la metadata de una ruta
+  // REEMPLAZA la del layout raíz campo por campo: dejando solo el título se
+  // perdían `capable` (que es lo que hace que abra sin barra de Safari) y las
+  // pantallas de arranque. Las splash son un navy liso sin logo, así que sirven
+  // igual para los dos productos.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "dx",
+    startupImage: appleStartupImages,
+  },
   openGraph: {
     type: "website",
     url: "https://www.intervalo.xyz/derivadas",
