@@ -53,6 +53,8 @@ import {
 import { CafecitoPanel, CAFE } from "./cafecito-panel"
 import { ReclutasPanel, type ReclutasTrigger } from "./reclutas-panel"
 import { ConSalidaAbajo } from "./slide-salida"
+import { marcarInstalarMostrado, tocaInstalar } from "./instalacion-trigger"
+import { PedidoInstalar, puedeOfrecerInstalar } from "./pedido-instalar"
 import { marcarReclutasMostrado, tocaReclutar } from "./reclutas-trigger"
 import {
   HITO_PERFIL,
@@ -141,6 +143,11 @@ type Slide =
   // devolverle; cuando sale por hito llega después de responder y lo que sigue
   // es la derivada siguiente.
   | { kind: "reclutas"; trigger: ReclutasTrigger; back?: Slide }
+  // Agregar el juego a la pantalla de inicio. Sin `back` ni `trigger`: es la
+  // única diapo de este grupo que no se puede abrir a mano —no hay botón en la
+  // cabecera ni atajo—, así que siempre llega después de responder y lo que
+  // sigue es la derivada siguiente.
+  | { kind: "instalar" }
 
 // El tinte de fondo de café/reclutas, de pantalla completa (ver el `motion.div`
 // debajo de la grilla, más abajo). Antes vivía adentro de la caja de la propia
@@ -520,6 +527,7 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
         | "milestone"
         | "cafecito"
         | "reclutas"
+        | "instalar"
         | null,
     ) => {
       const pending = pendingRef.current
@@ -626,6 +634,23 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
           goTo({ kind: "register" })
           return
         }
+      }
+      // La pantalla de inicio va después de los hitos de perfil y registro
+      // —que son del embudo— y antes de los dos pedidos, porque es lo único de
+      // acá que no le pide nada a la persona.
+      //
+      // No consume el cooldown compartido y por eso no desplaza al resto: ver
+      // INSTALAR_SEPARACION en instalacion-trigger.ts. La condición de aparato
+      // va en `puedeOfrecerInstalar` y no en el trigger, que tiene que poder
+      // correrse sin navegador (web/scripts/check-instalacion-trigger.ts).
+      if (
+        consumed !== "instalar" &&
+        tocaInstalar(totalCorrectas) &&
+        puedeOfrecerInstalar()
+      ) {
+        marcarInstalarMostrado(totalCorrectas)
+        goTo({ kind: "instalar" })
+        return
       }
       // Sin universidad no se marca el cooldown: el cafecito no se mostró, así
       // que no gastó su turno y vuelve en el próximo hito, ya con una
@@ -1753,6 +1778,26 @@ export function MobileFlow({ intro }: { intro: GameIntro }) {
                         advanceAfterAnswer("reclutas")
                       else goTo(slide.back ?? { kind: "exercise" }, "atras")
                     }}
+                    fullBleed
+                    className="flex-none"
+                  />
+                )}
+              </ConSalidaAbajo>
+            </div>
+          )}
+
+          {slide.kind === "instalar" && (
+            <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-5 pb-[var(--cta-pb)] pt-4">
+              {/* Sin `accion`: esta diapo no tiene botón de color porque la
+                  acción pasa afuera de la app, en el menú del navegador. El
+                  hueco vacío se esconde solo (`empty:hidden`), así que
+                  "Entendido" cae exactamente donde cae el Continuar del
+                  ranking. */}
+              <ConSalidaAbajo>
+                {({ salida }) => (
+                  <PedidoInstalar
+                    slotSalida={salida}
+                    onContinue={() => advanceAfterAnswer("instalar")}
                     fullBleed
                     className="flex-none"
                   />

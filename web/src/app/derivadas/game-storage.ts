@@ -5,6 +5,7 @@ const TOKEN_KEY = "intervalo:game:token"
 const CAFECITO_LAST_KEY = "intervalo:game:cafecito-last"
 const CAFECITO_VISTOS_KEY = "intervalo:game:cafecito-vistos"
 const REGISTRO_OFRECIDO_KEY = "intervalo:game:registro-ofrecido"
+const INSTALAR_KEY = "intervalo:game:instalar"
 
 // El token del invitado se lee además como STORE REACTIVO (`subscribeGameToken`
 // + `getGameTokenSnapshot`, que consume `useGameToken` en UseGamePlayer.ts).
@@ -69,7 +70,8 @@ export function saveGameToken(token: string) {
 
 /** Borra toda huella local de quién era este jugador: el token de invitado y
  *  los contadores que cuelgan de él (el cooldown de cafecito/reclutar, cuántas
- *  veces se mostró el café y los envíos recientes del chat).
+ *  veces se mostró el café, el estado del pedido de instalación y los envíos
+ *  recientes del chat).
  *
  *  La usa "Cerrar sesión" en `settings-panel.tsx`: cerrar la sesión de Clerk
  *  sin esto dejaría el token de invitado viejo guardado, y el próximo alta
@@ -82,6 +84,7 @@ export function clearGameIdentity() {
     window.localStorage.removeItem(CAFECITO_LAST_KEY)
     window.localStorage.removeItem(CAFECITO_VISTOS_KEY)
     window.localStorage.removeItem(REGISTRO_OFRECIDO_KEY)
+    window.localStorage.removeItem(INSTALAR_KEY)
     window.localStorage.removeItem(CHAT_SENDS_KEY)
   } catch {
     // Nada que limpiar si tampoco se pudo escribir.
@@ -208,5 +211,45 @@ export function registrarEnvio(at: number, ventanaMs: number) {
     const vigentes = readEnviosRecientes().filter((t) => t > at - ventanaMs)
     vigentes.push(at)
     window.localStorage.setItem(CHAT_SENDS_KEY, JSON.stringify(vigentes))
+  } catch {}
+}
+
+// Cuántas veces se ofreció agregar el juego a la pantalla de inicio, y en qué
+// derivada fue la última.
+//
+// Son DOS números y no uno porque el pedido se repite: vuelve cada
+// `INSTALAR_CADA` derivadas mientras la persona no haya instalado, con un tope
+// de `INSTALAR_MAX` apariciones. Con un solo marcador —como el del registro— no
+// hay forma de dejar de insistir, y un pedido que vuelve para siempre deja de
+// ser un pedido.
+//
+// Un solo valor JSON en vez de dos claves: se leen y se escriben siempre juntos,
+// y dos claves permiten el estado imposible de tener cuenta sin última.
+//
+// Cualquier cosa ilegible cuenta como "nunca se ofreció". Peor caso, alguien ve
+// los pasos de instalación una vez de más — que es el lado hacia el que conviene
+// errar, porque el otro es no ofrecérselo nunca a quien sí lo quería.
+export type PedidoInstalar = { vistas: number; ultima: number }
+
+const SIN_PEDIR: PedidoInstalar = { vistas: 0, ultima: -Infinity }
+
+export function readInstalarState(): PedidoInstalar {
+  if (typeof window === "undefined") return SIN_PEDIR
+  try {
+    const raw = window.localStorage.getItem(INSTALAR_KEY)
+    if (raw === null) return SIN_PEDIR
+    const v = JSON.parse(raw) as Partial<PedidoInstalar>
+    if (typeof v?.vistas !== "number" || typeof v?.ultima !== "number") {
+      return SIN_PEDIR
+    }
+    return { vistas: v.vistas, ultima: v.ultima }
+  } catch {
+    return SIN_PEDIR
+  }
+}
+
+export function saveInstalarState(estado: PedidoInstalar) {
+  try {
+    window.localStorage.setItem(INSTALAR_KEY, JSON.stringify(estado))
   } catch {}
 }

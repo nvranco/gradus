@@ -19,9 +19,14 @@ const ICON_CLS = "size-4"
 // Último paso, común a mobile: sin volver a abrirla desde el inicio el usuario
 // se queda en la pestaña del navegador y cree que no pasó nada. En escritorio no
 // aplica, ahí la instalación ya deja la app abierta.
-const REOPEN_STEP: Step = {
-  text: "Cerrá tu navegador y abrí Intervalo desde tu pantalla de inicio.",
-}
+//
+// Nombra el producto porque son DOS: el minijuego se instala como app aparte,
+// con su propio ícono y su propio nombre en la pantalla de inicio (ver
+// public/derivadas.webmanifest). Decirle "abrí Intervalo" a quien acaba de
+// agregar "dx" lo manda a buscar un ícono que puede no tener.
+const reopenStep = (producto: string): Step => ({
+  text: `Cerrá tu navegador y abrí ${producto} desde tu pantalla de inicio.`,
+})
 
 const PLATFORM_STEPS: Record<Platform, Step[]> = {
   ios: [
@@ -84,7 +89,7 @@ const PLATFORM_STEPS: Record<Platform, Step[]> = {
 
 // Los pasos como dato: quien los muestra decide la maqueta. Hoy el único que los
 // dibuja es install-hint-pane.tsx, como párrafos numerados.
-export function getInstallSteps(platform: Platform): Step[] {
+export function getInstallSteps(platform: Platform, producto = "Intervalo"): Step[] {
   const steps = PLATFORM_STEPS[platform]
-  return platform === "desktop" ? steps : [...steps, REOPEN_STEP]
+  return platform === "desktop" ? steps : [...steps, reopenStep(producto)]
 }
