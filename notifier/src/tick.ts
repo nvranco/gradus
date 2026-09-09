@@ -282,6 +282,7 @@ export const runGameEventTick = (
 interface EmailRunResult {
   bounce_sent: number
   winback_sent: number
+  winback_dx_sent: number
   streak_tier_sent: number
   cafecito_efecto_sent: number
   reclutas_sent: number
@@ -305,8 +306,8 @@ export const runEmailTick = (
     const result = (yield* res.json) as unknown as EmailRunResult
     yield* Console.log(
       `email tick: ${result.bounce_sent} bounce, ${result.winback_sent} win-back, ` +
-        `${result.streak_tier_sent} streak-tier, ${result.cafecito_efecto_sent} cafecito, ` +
-        `${result.reclutas_sent} reclutas sent`,
+        `${result.winback_dx_sent} win-back dx, ${result.streak_tier_sent} streak-tier, ` +
+        `${result.cafecito_efecto_sent} cafecito, ${result.reclutas_sent} reclutas sent`,
     )
   }).pipe(Effect.mapError((e) => (e instanceof Error ? e : new Error(String(e)))))
 
