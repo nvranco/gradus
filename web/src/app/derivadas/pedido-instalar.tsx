@@ -27,9 +27,13 @@ import { getPlatform, isStandalone, usePlatform } from "@/lib/platform/detect"
 import { claseDeSalida, Salida } from "./slide-salida"
 
 /** El nombre con el que el juego queda en la pantalla de inicio.
+ *
  *  Mantener igual al `short_name` de public/derivadas.webmanifest y al
- *  `appleWebApp.title` de layout.tsx: es el ícono que la persona va a buscar. */
-export const NOMBRE_INSTALADO = "dx"
+ *  `appleWebApp.title` de layout.tsx: es la etiqueta que la persona va a buscar
+ *  abajo del ícono, y los pasos de instalación la nombran ("abrí X desde tu
+ *  pantalla de inicio"). Decirle un nombre y que le quede otro es mandarla a
+ *  buscar algo que no está. */
+export const NOMBRE_INSTALADO = "Intervalo"
 
 /** ¿Tiene sentido ofrecerlo en este aparato?
  *

@@ -51,8 +51,13 @@ export const metadata: Metadata = {
   manifest: "/derivadas.webmanifest",
   // iOS NO lee el manifest para "Agregar a inicio": se lleva el
   // `apple-touch-icon` de la página abierta (lo pone apple-icon.tsx) y este
-  // título. Sin esto el juego quedaba en la pantalla de inicio llamándose
-  // "Intervalo", al lado del Intervalo de verdad y con el mismo nombre.
+  // título.
+  //
+  // El nombre es "Intervalo" y no "dx": lo que distingue al juego en la pantalla
+  // de inicio es el ÍCONO —el cuadradito con la dx y su barra de colores, ver
+  // marca-dx.tsx— y no la etiqueta. La marca es una sola, y quien llega acá por
+  // un link de WhatsApp reconoce "Intervalo" y no unas siglas que todavía no
+  // significan nada para esa persona.
   //
   // Va el objeto entero y no solo `title` porque la metadata de una ruta
   // REEMPLAZA la del layout raíz campo por campo: dejando solo el título se
@@ -62,7 +67,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "dx",
+    title: "Intervalo",
     startupImage: appleStartupImages,
   },
   openGraph: {
