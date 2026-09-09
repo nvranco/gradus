@@ -4297,6 +4297,11 @@
             "type": "integer",
             "title": "Reclutas Sent",
             "default": 0
+          },
+          "winback_dx_sent": {
+            "type": "integer",
+            "title": "Winback Dx Sent",
+            "default": 0
           }
         },
         "type": "object",

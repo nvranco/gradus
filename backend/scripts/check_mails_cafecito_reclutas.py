@@ -1,6 +1,6 @@
-"""Verifica los dos mails nuevos: el efecto de un cafecito y el resumen de reclutas.
+"""Verifica los mails del cruce: cafecito, reclutas y el "volvé" del minijuego.
 
-Lo que importa de estos dos no es que se manden, sino CUÁNDO NO se mandan:
+Lo que importa de todos no es que se manden, sino CUÁNDO NO se mandan:
 
 · Un mail que dice «tu cafecito generó 0 XP» es peor que ningún mail.
 · Un resumen semanal vacío convierte el canal en ruido y enseña a ignorarlo, que
@@ -10,6 +10,12 @@ Y una promesa que el mail del cafecito NO puede hacer: `multiplier_for` colapsa
 el empuje global y el dirigido en un número, y los cafecitos de la ventana se
 suman a propósito, así que la XP no se puede atribuir a UNA donación. El copy
 dice «el empuje de tu universidad», nunca «tu cafecito».
+
+Y el caso que estaba mal del otro lado: un usuario que existe SOLO por el juego
+cumplía para siempre la condición del bounce —«ninguna sesión de Intervalo
+terminada»— y recibía «Solo falta tu primera sesión» habiendo jugado cien
+derivadas, mientras que el winback, que pide una sesión terminada, no le llegaba
+nunca.
 
 Uso:
     python backend/scripts/check_mails_cafecito_reclutas.py
@@ -166,6 +172,79 @@ if otra:
           f"(dio {otra[0].datos['xp_semana']})")
     check("con una sola fila, la que se movió",
           len(otra[0].datos["filas"]) == 1)
+
+# ── El "volvé" del minijuego, y el bounce que le mentía ──────────────────────
+#
+# Estas dos van juntas porque son el mismo hecho visto de los dos lados: un
+# usuario que existe SOLO por el juego. Hasta acá, ese usuario cumplía para
+# siempre la condición del bounce —«ninguna sesión de Intervalo terminada»— y
+# recibía «Solo falta tu primera sesión» habiendo jugado cien derivadas, y en
+# cambio no podía recibir nunca el winback, que pide una sesión terminada.
+from datetime import datetime, timedelta  # noqa: E402
+
+print()
+print("— el volvé del juego —")
+enviados.clear()
+
+u_dx = User(id=50, clerk_user_id="dx50", email="dx@x.com", name="Dedé",
+            created_at=datetime.utcnow() - timedelta(days=30))
+db.add(u_dx)
+db.flush()
+p_dx = GamePlayer(
+    id=50, alias="dede", user_id=50, exercises_correct=40,
+    last_seen_at=datetime.utcnow() - timedelta(days=6),
+)
+db.add(p_dx)
+db.commit()
+
+check("el bounce ya no le sale a quien jugó",
+      all(u.id != 50 for u in le.due_bounce_emails(db)))
+# Y le sigue saliendo a quien de verdad no hizo nada.
+u_vacio = User(id=51, clerk_user_id="dx51", email="vacio@x.com", name="Vacío",
+               created_at=datetime.utcnow() - timedelta(days=30))
+db.add(u_vacio)
+db.commit()
+check("pero le sigue saliendo a quien no hizo nada",
+      any(u.id == 51 for u in le.due_bounce_emails(db)))
+
+pendientes = le.due_winback_dx_emails(db)
+check("a los 6 días sin derivar toca el volvé", [u.id for u, _ in pendientes] == [50],
+      f"({[u.id for u, _ in pendientes]})")
+check("y se manda", le.send_winback_dx_email(db, u_dx, p_dx))
+check("el asunto dice volvé a derivar",
+      "Volvé a derivar" in enviados[-1]["subject"], enviados[-1]["subject"])
+check("y el botón lleva al juego y no a la home",
+      "/derivadas?utm_source=email" in enviados[-1]["html"])
+check("no vuelve mientras no juegue", le.due_winback_dx_emails(db) == [])
+
+p_dx.last_seen_at = datetime.utcnow()
+db.commit()
+check("y el que volvió a jugar tampoco recibe",
+      [u.id for u, _ in le.due_winback_dx_emails(db)] == [])
+# La secuencia real: se le mandó un mail hace diez días, volvió a jugar después
+# de eso, y hace seis que no aparece. Ahí SÍ se re-arma — un mail por ausencia y
+# no uno por semana. Se mueve la marca y no `last_seen_at`, porque el reloj no
+# va para atrás: alguien "vuelve" jugando, no dejando de jugar más temprano.
+p_dx.winback_email_sent_at = datetime.utcnow() - timedelta(days=10)
+p_dx.last_seen_at = datetime.utcnow() - timedelta(days=6)
+db.commit()
+check("pero si volvió y se fue otra vez, se re-arma",
+      [u.id for u, _ in le.due_winback_dx_emails(db)] == [50],
+      f"({[u.id for u, _ in le.due_winback_dx_emails(db)]})")
+
+# El invitado no puede entrar y no es un olvido: no tiene mail.
+db.add(GamePlayer(id=52, alias="invitado", user_id=None, exercises_correct=10,
+                  last_seen_at=datetime.utcnow() - timedelta(days=10)))
+db.commit()
+check("al invitado no se le manda nada, porque no tiene mail",
+      all(p.id != 52 for _, p in le.due_winback_dx_emails(db)))
+
+# Y el que se dio de baja no recibe, como todos los demás.
+u_dx.email_unsubscribed = True
+db.commit()
+check("y el que se dio de baja tampoco", le.due_winback_dx_emails(db) == [])
+u_dx.email_unsubscribed = False
+db.commit()
 
 db.close()
 

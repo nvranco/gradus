@@ -179,6 +179,10 @@ class EmailRunResponse(BaseModel):
     # response y el log del worker decía que no se mandó ninguno.
     cafecito_efecto_sent: int = 0
     reclutas_sent: int = 0
+    # El "volvé" del minijuego. Va con default por lo mismo que los dos de
+    # arriba: sin declararlo, FastAPI lo descarta del response y el log del
+    # worker dice que no se mandó ninguno.
+    winback_dx_sent: int = 0
 
 
 class SweepAbandonedResponse(BaseModel):

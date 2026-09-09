@@ -851,6 +851,12 @@ class GamePlayer(Base):
     referral_xp_push_seen = Column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Cuándo se le mandó el último "volvé" del juego. Se compara contra
+    # `last_seen_at`: si volvió a jugar después del mail, la próxima ausencia
+    # vuelve a habilitarlo. Misma regla que `users.winback_email_sent_at`, y
+    # separada de aquella porque son dos productos —quien se fue de dx puede
+    # seguir estudiando en Intervalo, y ahí no hay nada que recuperar—.
+    winback_email_sent_at = Column(DateTime, nullable=True)
     # El resto de la división, en centésimas de XP (0-99).
     #
     # El 10% de una derivada de 25 XP son 2,5. Redondeando cada pago hacia abajo
