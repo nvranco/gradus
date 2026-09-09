@@ -12,7 +12,12 @@ import { usePlatform, type Platform } from "@/lib/platform/detect"
 export function InstallHintPane({
   platformOverride,
   descripcion,
+  producto,
 }: {
+  // Cómo se llama lo que se está instalando, para el último paso ("abrí X desde
+  // tu pantalla de inicio"). El minijuego se instala como app aparte y con otro
+  // nombre; ver install-steps.tsx.
+  producto?: string
   // Para qué sirve instalar, cuando el contexto lo dice distinto. El minijuego
   // de derivadas habla de practicar, no de repasos: es el mismo mecanismo pero
   // no la misma palabra, y con un solo texto fijo una de las dos pantallas
@@ -54,7 +59,7 @@ export function InstallHintPane({
             en el server no existe), así que el primer paint va sin pasos. */}
         {platform && (
           <div className="flex flex-col gap-4">
-            {getInstallSteps(platform).map((step, i) => (
+            {getInstallSteps(platform, producto).map((step, i) => (
               <p key={i} className="leading-relaxed text-foreground/85">
                 <span className="tabular-nums text-foreground/45">{i + 1}.</span>{" "}
                 {step.text}

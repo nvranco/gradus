@@ -11,8 +11,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import posthog from "posthog-js"
 import { Button } from "@/components/ui/button"
 import { CareerSelect, UniversityGrid } from "@/components/onboarding-fields"
-import { InstallSheet } from "@/components/install-sheet"
-import { isStandalone, usePlatform } from "@/lib/platform/detect"
 import { readOnboarding, saveOnboarding } from "@/lib/onboarding/storage"
 import { canonicalUniversity } from "@/lib/university-tags"
 import { cn } from "@/lib/utils"
@@ -611,10 +609,6 @@ export function RegisterSlide({
             </p>
           </>
         )}
-        {/* Solo en los hitos, no en el registro que se abre desde
-            Configuración: allá la persona vino a hacer una cosa puntual y
-            ofrecerle otra en el medio es ruido. */}
-        {!desdeConfiguracion && <InstalarLinea />}
         {/* El @ ya se eligió antes de llegar acá (en "Elegí tu @" o en el
             registro de Configuración) — en las dos variantes de hito no hay
             nada que elegir, así que el campo no existe. Solo la variante de
@@ -740,60 +734,6 @@ export function RegisterSlide({
         )}
       </Salida>
     </div>
-  )
-}
-
-/** El ofrecimiento de agregar el juego a la pantalla de inicio.
- *
- * Va en la slide del registro y no en una barra encima del juego (la smart bar
- * está excluida de /derivadas a propósito): es el único momento del embudo en
- * que la persona ya paró a decidir si se queda, así que es el único en que
- * pedirle que instale algo no interrumpe nada que estuviera haciendo.
- *
- * Los pasos son los de siempre —`InstallSheet`, el mismo que usa la app— y no
- * una copia: son distintos por sistema operativo y mantenerlos en dos lugares
- * es garantía de que uno quede viejo.
- *
- * Tres condiciones para mostrarse, y las tres importan:
- *   · `platform !== null` es además el gate de MONTAJE (`usePlatform` devuelve
- *     null en el servidor), así que `isStandalone()` recién se lee en el
- *     cliente y no hay desajuste de hidratación;
- *   · en escritorio no se ofrece: no es de donde viene esta gente ni donde el
- *     ícono en la pantalla de inicio significa algo;
- *   · ya instalada, no hay nada que ofrecer. */
-function InstalarLinea() {
-  const platform = usePlatform()
-  const [abierta, setAbierta] = useState(false)
-  if (platform === null || platform === "desktop" || isStandalone()) return null
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          posthog.capture("game_install_hint_open", { platform })
-          setAbierta(true)
-        }}
-        className="text-sm leading-relaxed text-foreground/70 underline underline-offset-2 transition-colors hover:text-foreground"
-      >
-        Agregalo a tu pantalla de inicio para jugar más cómodo y que te lleguen
-        recordatorios para practicar.
-      </button>
-      <InstallSheet
-        platform={platform}
-        open={abierta}
-        onOpenChange={setAbierta}
-        descripcion={
-          <>
-            Agregá Derivadas a tu{" "}
-            <strong className="font-semibold text-chart-5">
-              pantalla de inicio
-            </strong>{" "}
-            para jugar en pantalla completa, que no se te pierda el progreso y
-            que te lleguen recordatorios para practicar.
-          </>
-        }
-      />
-    </>
   )
 }
 
