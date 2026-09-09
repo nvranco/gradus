@@ -1,7 +1,7 @@
 {
   "id": "/derivadas",
-  "name": "Intervalo dx",
-  "short_name": "dx",
+  "name": "Intervalo",
+  "short_name": "Intervalo",
   "description": "Memorizá todas las derivadas y llegá mejor preparado a tus parciales.",
   "start_url": "/derivadas",
   "display": "standalone",
