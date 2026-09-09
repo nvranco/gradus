@@ -101,7 +101,15 @@ ok = le.send_reclutas_semanal_email(db, u, xp_semana=215, filas=filas)
 check("se manda", ok)
 mail = enviados[-1]
 check("el asunto lleva el total", "215 XP" in mail["subject"], f"({mail['subject']!r})")
+check("y dice que las generaron los reclutas, no que las dieron",
+      mail["subject"] == "Tus reclutas generaron 215 XP esta semana 🪖", mail["subject"])
 check("el destacado dice de cuántas personas", "de 3 personas" in mail["html"])
+# Con un solo recluta decía "de 1 personas", que es la clase de detalle que hace
+# dudar de si el número está bien.
+enviados.clear()
+le.send_reclutas_semanal_email(db, u, xp_semana=7, filas=[("solo", "UBA", 7)])
+check("y con uno solo dice «1 persona», no «1 personas»",
+      "de 1 persona." in enviados[-1]["html"], "de 1 personas" )
 for alias, uni, xp in filas:
     check(f"la fila de @{alias} está", f"@{alias}" in mail["html"] and f"{xp} XP" in mail["html"])
 check("va como tabla y no como flex, que los clientes de correo no soportan",
@@ -211,8 +219,15 @@ pendientes = le.due_winback_dx_emails(db)
 check("a los 6 días sin derivar toca el volvé", [u.id for u, _ in pendientes] == [50],
       f"({[u.id for u, _ in pendientes]})")
 check("y se manda", le.send_winback_dx_email(db, u_dx, p_dx))
-check("el asunto dice volvé a derivar",
-      "Volvé a derivar" in enviados[-1]["subject"], enviados[-1]["subject"])
+# El asunto es EL MISMO que el de Intervalo, a propósito: mismo remitente y una
+# sola marca, así que dos asuntos distintos para el mismo mensaje se leen como
+# dos productos peleándose la atención de la misma persona. Lo que lleva a cada
+# lado es el botón.
+check("el asunto es el mismo que el de Intervalo",
+      enviados[-1]["subject"] == "¡Volvé Dedé! 👀", enviados[-1]["subject"])
+check("y el cuerpo es el mismo salvo la palabra que cambia",
+      "Tus derivadas te extrañan y te están sacando puestos en el ranking."
+      in enviados[-1]["html"] and "Recuperalos hoy mismo." in enviados[-1]["html"])
 check("y el botón lleva al juego y no a la home",
       "/derivadas?utm_source=email" in enviados[-1]["html"])
 check("no vuelve mientras no juegue", le.due_winback_dx_emails(db) == [])
