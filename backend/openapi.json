@@ -1320,6 +1320,238 @@
         }
       }
     },
+    "/game/derivemos/push/subscribe": {
+      "post": {
+        "tags": [
+          "game"
+        ],
+        "summary": "Game Push Subscribe",
+        "description": "Guarda el navegador y devuelve las preferencias, para no pedirlas aparte.",
+        "operationId": "game_push_subscribe_game_derivemos_push_subscribe_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-game-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Game-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GamePushSubscribeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameNotificationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "game"
+        ],
+        "summary": "Game Push Unsubscribe",
+        "operationId": "game_push_unsubscribe_game_derivemos_push_subscribe_delete",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-game-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Game-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GamePushUnsubscribeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameNotificationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/derivemos/notification-settings": {
+      "get": {
+        "tags": [
+          "game"
+        ],
+        "summary": "Game Get Notification Settings",
+        "operationId": "game_get_notification_settings_game_derivemos_notification_settings_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-game-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Game-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameNotificationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "game"
+        ],
+        "summary": "Game Put Notification Settings",
+        "description": "Prender o apagar los avisos y elegir a qu\u00e9 hora.\n\nLas mismas validaciones que en Intervalo \u2014y por eso el mismo formato de\nhora\u2014: la franja de quince minutos es la que compara el resolutor, y un huso\ninv\u00e1lido romper\u00eda el tick de todas las noches, no el pedido de esta persona.",
+        "operationId": "game_put_notification_settings_game_derivemos_notification_settings_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-game-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Game-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameNotificationSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameNotificationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -2256,6 +2488,22 @@
               ],
               "title": "Notification Id"
             }
+          },
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App"
+            }
           }
         ],
         "responses": {
@@ -2531,6 +2779,212 @@
         "summary": "Internal Push Delivery",
         "description": "Worker-facing: qu\u00e9 devolvi\u00f3 el push service para cada env\u00edo del tick.\n\nLa fila de notification_sends se crea al elegir el copy, antes de intentar\nmandar, as\u00ed que sin este reporte un env\u00edo fallido queda indistinguible de uno\nexitoso.",
         "operationId": "internal_push_delivery_internal_push_delivery_post",
+        "parameters": [
+          {
+            "name": "x-internal-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Internal-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushDeliveryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/notifications/game": {
+      "get": {
+        "summary": "Internal Due Game Notifications",
+        "description": "Worker-facing: el aviso programado del juego, reclamado en la transacci\u00f3n.",
+        "operationId": "internal_due_game_notifications_internal_notifications_game_get",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          },
+          {
+            "name": "x-internal-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Internal-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DueGameNotification"
+                  },
+                  "title": "Response Internal Due Game Notifications Internal Notifications Game Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/notifications/game-events": {
+      "get": {
+        "summary": "Internal Due Game Event Notifications",
+        "description": "Worker-facing: los avisos reactivos del juego (cafecito, reclutas, ranking).",
+        "operationId": "internal_due_game_event_notifications_internal_notifications_game_events_get",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          },
+          {
+            "name": "x-internal-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Internal-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DueGameNotification"
+                  },
+                  "title": "Response Internal Due Game Event Notifications Internal Notifications Game Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/push/game-prune": {
+      "post": {
+        "summary": "Internal Prune Game Push",
+        "operationId": "internal_prune_game_push_internal_push_game_prune_post",
+        "parameters": [
+          {
+            "name": "x-internal-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "X-Internal-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrunePushRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/push/game-delivery": {
+      "post": {
+        "summary": "Internal Game Push Delivery",
+        "operationId": "internal_game_push_delivery_internal_push_game_delivery_post",
         "parameters": [
           {
             "name": "x-internal-secret",
@@ -3733,6 +4187,48 @@
         ],
         "title": "DeliveryResult"
       },
+      "DueGameNotification": {
+        "properties": {
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "notification_id": {
+            "type": "integer",
+            "title": "Notification Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/PushSubscriptionOut"
+            },
+            "type": "array",
+            "title": "Subscriptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "title",
+          "body",
+          "notification_id",
+          "url",
+          "subscriptions"
+        ],
+        "title": "DueGameNotification",
+        "description": "Un aviso del minijuego listo para mandar.\n\nMisma forma que `DueNotification` salvo dos campos, y las dos diferencias\ntienen motivo. `player_id` en vez de `user_id` porque el destinatario puede\nser un invitado, que no tiene fila en `users` \u2014que es justamente el caso que\neste canal existe para cubrir\u2014. Y `url` porque son dos apps instaladas: sin\ndecirlo, el service worker abre la home de Intervalo (tiene `\"/\"`\nhardcodeado) y el tap lleva al producto equivocado.\n\nNo lleva `pending_count`: ese n\u00famero son los repasos SM-2 que la persona\ntiene vencidos, y el juego no tiene repasos."
+      },
       "DueNotification": {
         "properties": {
           "user_id": {
@@ -4813,6 +5309,76 @@
         "title": "GameMessageOut",
         "description": "Un mensaje del chat. Trae el @ y la universidad DE CUANDO SE ESCRIBI\u00d3, no\nlos de hoy: ver el docstring de GameMessage en models.py."
       },
+      "GameNotificationSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "GameNotificationSettings"
+      },
+      "GameNotificationSettingsRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "GameNotificationSettingsRequest"
+      },
       "GamePlayerCreateRequest": {
         "properties": {
           "group_id": {
@@ -5048,6 +5614,54 @@
         ],
         "title": "GamePulse",
         "description": "Latido del ranking. El cliente lo consulta cada 10 s y solo refresca la\nlista si `version` cambi\u00f3 \u2014 y de paso ese mismo pedido es lo que hace\navanzar la actividad simulada (ver game/simulation.py).\n\nLos empujes vigentes viajan ac\u00e1 y no en un endpoint propio: este pedido ya\nlate cada 10 s desde los dos layouts, as\u00ed que el cartel se entera sin sumar\nni una request."
+      },
+      "GamePushKeys": {
+        "properties": {
+          "p256dh": {
+            "type": "string",
+            "title": "P256Dh"
+          },
+          "auth": {
+            "type": "string",
+            "title": "Auth"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "GamePushKeys"
+      },
+      "GamePushSubscribeRequest": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/GamePushKeys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "title": "GamePushSubscribeRequest"
+      },
+      "GamePushUnsubscribeRequest": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint"
+        ],
+        "title": "GamePushUnsubscribeRequest"
       },
       "GameRecruitEntry": {
         "properties": {

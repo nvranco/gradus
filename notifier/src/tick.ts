@@ -20,12 +20,19 @@ interface PushSub {
 }
 
 interface DueNotification {
-  user_id: number
-  pending_count: number
   title: string
   body: string
   notification_id: number
   subscriptions: PushSub[]
+  // A dónde lleva el tap. Solo lo manda el minijuego, que se instala como app
+  // aparte: sin esto el service worker abre "/" y el aviso de dx termina en la
+  // home de Intervalo.
+  url?: string
+  // Los dos que solo trae Intervalo. Acá no se usan —el envío solo necesita
+  // título, cuerpo, id y suscripciones— y por eso son opcionales: los avisos del
+  // juego pueden ir para un invitado, que no tiene `user_id`.
+  user_id?: number
+  pending_count?: number
 }
 
 export const loadConfig: Effect.Effect<NotifierConfig, Error> = Effect.gen(
@@ -64,7 +71,13 @@ interface SendOutcome {
 /** Send one push; resolves with the outcome to report back. */
 const sendPush = (
   sub: PushSub,
-  payload: { title: string; body: string; notificationId: number },
+  payload: {
+    title: string
+    body: string
+    notificationId: number
+    url?: string
+    app?: string
+  },
 ): Effect.Effect<SendOutcome> =>
   Effect.tryPromise({
     try: () =>
@@ -74,6 +87,11 @@ const sendPush = (
           title: payload.title,
           body: payload.body,
           id: payload.notificationId,
+          // `app` viaja de vuelta en el beacon del click: los envíos del juego
+          // están en otra tabla, con otro espacio de ids, y sin decir de cuál
+          // viene el click marcaría abierta la fila equivocada.
+          ...(payload.url ? { url: payload.url } : {}),
+          ...(payload.app ? { app: payload.app } : {}),
         }),
         { TTL: 86400 },
       ),
@@ -109,7 +127,25 @@ const sendPush = (
  * envío, el reporte de entrega y el prune. */
 const correrTanda = (
   config: NotifierConfig,
-  { ruta, etiqueta, force }: { ruta: string; etiqueta: string; force?: boolean },
+  {
+    ruta,
+    etiqueta,
+    force,
+    // Las rutas de reporte son parámetros por lo mismo que la de origen: el
+    // minijuego guarda sus envíos y sus suscripciones en tablas propias, así que
+    // un `notification_id` puede referirse a dos filas distintas según de qué
+    // tanda venga. Los valores por defecto son los de Intervalo.
+    rutaDelivery = "/internal/push/delivery",
+    rutaPrune = "/internal/push/prune",
+    app,
+  }: {
+    ruta: string
+    etiqueta: string
+    force?: boolean
+    rutaDelivery?: string
+    rutaPrune?: string
+    app?: string
+  },
 ): Effect.Effect<void, Error, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
@@ -130,6 +166,7 @@ const correrTanda = (
         title: u.title,
         body: u.body,
         notificationId: u.notification_id,
+        url: u.url,
       })),
     )
     yield* Console.log(
@@ -144,6 +181,8 @@ const correrTanda = (
           title: job.title,
           body: job.body,
           notificationId: job.notificationId,
+          url: job.url,
+          app,
         }),
       { concurrency: 5 },
     )
@@ -152,7 +191,7 @@ const correrTanda = (
     // suscripción y perder el motivo.
     yield* client
       .execute(
-        HttpClientRequest.post(`${config.apiBaseUrl}/internal/push/delivery`).pipe(
+        HttpClientRequest.post(`${config.apiBaseUrl}${rutaDelivery}`).pipe(
           HttpClientRequest.setHeader("X-Internal-Secret", config.secret),
           HttpClientRequest.bodyJsonUnsafe({
             results: results.map((r) => ({
@@ -174,7 +213,7 @@ const correrTanda = (
 
     if (deadIds.length > 0) {
       yield* client.execute(
-        HttpClientRequest.post(`${config.apiBaseUrl}/internal/push/prune`).pipe(
+        HttpClientRequest.post(`${config.apiBaseUrl}${rutaPrune}`).pipe(
           HttpClientRequest.setHeader("X-Internal-Secret", config.secret),
           HttpClientRequest.bodyJsonUnsafe({ subscription_ids: deadIds }),
         ),
@@ -206,6 +245,38 @@ export const runEventTick = (
     ruta: "/internal/notifications/events",
     etiqueta: "event tick",
     force: options.force,
+  })
+
+// Las rutas de reporte del minijuego, para no repetir el literal en las dos
+// tandas: sus envíos y sus suscripciones viven en tablas propias.
+const RUTAS_DEL_JUEGO = {
+  rutaDelivery: "/internal/push/game-delivery",
+  rutaPrune: "/internal/push/game-prune",
+  app: "dx",
+} as const
+
+/** El aviso programado del minijuego. */
+export const runGameTick = (
+  config: NotifierConfig,
+  options: { force?: boolean } = {},
+): Effect.Effect<void, Error, HttpClient.HttpClient> =>
+  correrTanda(config, {
+    ruta: "/internal/notifications/game",
+    etiqueta: "game tick",
+    force: options.force,
+    ...RUTAS_DEL_JUEGO,
+  })
+
+/** Los avisos reactivos del minijuego: cafecito, reclutas, ranking, universidad. */
+export const runGameEventTick = (
+  config: NotifierConfig,
+  options: { force?: boolean } = {},
+): Effect.Effect<void, Error, HttpClient.HttpClient> =>
+  correrTanda(config, {
+    ruta: "/internal/notifications/game-events",
+    etiqueta: "game event tick",
+    force: options.force,
+    ...RUTAS_DEL_JUEGO,
   })
 
 interface EmailRunResult {

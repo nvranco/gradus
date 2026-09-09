@@ -75,6 +75,30 @@ es la mecánica que gobierna la experiencia entera:
   el piso como Elo de desbloqueo de la fila, así que la promesa de la pantalla y
   lo que el generador hace son el mismo número.
 
+### Avisos del minijuego (`game/notifications.py`, `game/notification_copy.py`)
+
+Canal propio de push, porque el de Intervalo no le llega: `push_subscriptions`
+exige un usuario, `due_notifications` corta en repasos SM-2 pendientes y todo su
+copy sale de tablas que el juego no toca.
+
+- **Le llega al invitado**, que es la mitad del punto: `game_push_subscriptions`
+  cuelga del jugador y los endpoints van con el token de invitado.
+- **Tres por día como máximo, y el cupo es de la PERSONA**: uno programado en el
+  horario elegido y hasta dos reactivos. Un jugador registrado reclama contra los
+  contadores de su `User`, así que un día en que dx tenga tres cosas que decir
+  Intervalo no manda nada. El orden lo fija el cron del notifier, que corre las
+  tandas del juego tres y seis minutos antes que las de Intervalo.
+- **Programadas**: `social` (compañeros de tu universidad que jugaron hoy, XP de
+  la semana, tu aporte), `reactivacion` y `record`. Si no hay ningún hecho que
+  contar, no se manda nada: no existe un «vení a jugar» genérico.
+- **Reactivas**, por orden de prioridad: `empuje` (cafecito), `recluta`,
+  `ranking` y `universidad`.
+- **La reactivación termina.** Sale a los días 1, 3, 7 y 14 de silencio y nunca
+  más; al mes se apaga el canal solo para esa persona.
+- **Qué se mide con qué.** El ranking de personas va por XP y el de universidades
+  por Elo promedio (que es lo que impide que un cafecito compre puesto), así que
+  ningún aviso puede prometer XP para escalar la tabla de universidades.
+
 ## Misceláneo
 
 - Splash animado con colores de belt al cargar (`splash-context.tsx`/`splash-gate.tsx`).

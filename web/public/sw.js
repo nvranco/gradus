@@ -63,6 +63,14 @@ self.addEventListener("push", function (event) {
   let title = "Intervalo"
   let body = "Tenés repasos pendientes hoy 📚"
   let notificationId = null
+  // A dónde lleva el tap y de qué producto es el aviso. Son dos apps instaladas
+  // —Intervalo y dx— con dos íconos y dos manifests, así que un aviso del juego
+  // que abre "/" manda a la persona al producto equivocado, y un click reportado
+  // sin decir de cuál viene marcaría como abierta la fila de otra tabla: los
+  // envíos del juego viven en `game_notification_sends`, con su propio espacio
+  // de ids. El backend manda los dos campos; sin ellos vale lo de siempre.
+  let url = "/"
+  let app = ""
   let raw = null
   let decodeError = null
 
@@ -78,6 +86,8 @@ self.addEventListener("push", function (event) {
         if (data.title) title = data.title
         if (data.body) body = data.body
         if (data.id != null) notificationId = data.id
+        if (data.url) url = data.url
+        if (data.app) app = data.app
       } catch (e) {
         decodeError = `JSON.parse failed: ${e}`
       }
@@ -110,7 +120,7 @@ self.addEventListener("push", function (event) {
         body,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
-        data: { url: "/", notificationId },
+        data: { url, app, notificationId },
       }),
     ]),
   )
@@ -132,6 +142,7 @@ self.addEventListener("notificationclick", function (event) {
             beacon({
               event: "click",
               notification_id: String(notificationId),
+              app: event.notification.data?.app || "",
               endpoint: endpoint || "",
             }),
           )

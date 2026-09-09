@@ -843,6 +843,14 @@ class GamePlayer(Base):
     # recluta y no en la del reclutador porque es lo que muestra cada renglón de
     # esa vista: no el total, sino cuánto puso cada uno.
     referral_xp_given = Column(Integer, nullable=False, default=0, server_default="0")
+    # Cuánto de esa XP ya se le contó a quien trajo a esta persona en un aviso
+    # push. La diferencia contra `referral_xp_given` es lo NUEVO, que es lo único
+    # que se puede anunciar sin repetir. Gemela de `users.referral_xp_push_seen`,
+    # y existe porque el reclutador puede ser un INVITADO: ese es justamente el
+    # caso que Intervalo no cubre (game/notifications.py :: _contexto_recluta).
+    referral_xp_push_seen = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     # El resto de la división, en centésimas de XP (0-99).
     #
     # El 10% de una derivada de 25 XP son 2,5. Redondeando cada pago hacia abajo
@@ -898,10 +906,110 @@ class GamePlayer(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen_at = Column(DateTime, nullable=True)
 
+    # ── Avisos ──────────────────────────────────────────────────────────────
+    # Las preferencias de notificación DEL INVITADO. Quien tiene cuenta usa las
+    # de `users`: son la misma persona y no puede tener dos horarios ni dos
+    # cupos, y además es lo que hace que el tope de 3 por día sea de la persona
+    # y no de cada producto (ver game/notifications.py :: titular_del_cupo).
+    #
+    # Están acá y no solo en `users` porque el 50-95% del juego, según la
+    # semana, es gente sin cuenta: el push es la única forma de traerla de
+    # vuelta, y `push_subscriptions.user_id` es NOT NULL. Al registrarse, lo que
+    # haya elegido de invitado se copia al usuario (deps.link_guest_to_user).
+    notify_enabled = Column(Boolean, default=False, nullable=False,
+                            server_default=text("false"))
+    notify_time = Column(String(5), nullable=True)  # "HH:MM" local
+    notify_timezone = Column(String(64), nullable=True)
+    # Cupo: uno programado por día (`notify_last_sent_on`) y hasta dos
+    # reactivos (`notify_events_*`), exactamente como en `users`. Los nombres
+    # coinciden a propósito — el resolutor los lee por duck typing sobre el
+    # titular del cupo, que puede ser un `User` o este mismo jugador.
+    notify_last_sent_on = Column(Date, nullable=True)
+    notify_last_category = Column(String(30), nullable=True)
+    notify_last_variant_key = Column(String(50), nullable=True)
+    notify_events_on = Column(Date, nullable=True)
+    notify_events_count = Column(Integer, default=0, nullable=False,
+                                 server_default="0")
+    # Último puesto del ranking del juego que esta persona YA VIO en un aviso.
+    # Sin esto, "te pasaron" saldría todos los días mientras siga abajo, que es
+    # la misma noticia repetida. Es el gemelo de `users.notify_last_rank`.
+    notify_last_rank = Column(Integer, nullable=True)
+
     # `foreign_keys` explícito: desde que existe `users.referred_by_player_id`
     # hay DOS caminos de clave foránea entre estas dos tablas, y sin decir cuál
     # es este SQLAlchemy no puede armar el join.
     user = relationship("User", foreign_keys=[user_id])
+
+
+class GamePushSubscription(Base):
+    """La suscripción de push de un JUGADOR, con o sin cuenta.
+
+    Tabla aparte de `push_subscriptions` y no una columna nueva allá. Dos
+    motivos, y el primero es el que decide: aquella tiene `user_id` NOT NULL y
+    su `upsert` borra todas las demás filas del usuario, así que aflojarla para
+    que acepte invitados toca el canal que hoy funciona. El segundo es que
+    `game/` ya es un bounded context declarado y esto es suyo.
+
+    Una fila por navegador. `endpoint` es único a secas —y no por jugador— para
+    que el mismo aparato no quede suscripto dos veces: si alguien juega de
+    invitado, se registra y vuelve a activar, el endpoint es el mismo y la fila
+    tiene que mudarse de jugador, no duplicarse.
+    """
+    __tablename__ = "game_push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(Integer, ForeignKey("game_players.id"), nullable=False,
+                       index=True)
+
+    endpoint = Column(String(1000), nullable=False)
+    p256dh = Column(String(1000), nullable=False)
+    auth = Column(String(1000), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="unique_game_endpoint"),
+    )
+
+
+class GameNotificationSend(Base):
+    """Historial de avisos del juego: una fila por jugador por envío.
+
+    Gemela de `notification_sends` y por los mismos motivos —append-only, con la
+    categoría y la variante elegidas, para poder mirar efectividad—, más uno
+    propio: es la idempotencia de los avisos reactivos. La pregunta «¿ya se lo
+    dije hoy?» se contesta con una consulta acá y no estrenando una columna de
+    estado por cada cosa que se pueda avisar.
+
+    Separada de `notification_sends` por lo mismo que la tabla de suscripciones:
+    aquella tiene `user_id` NOT NULL y un invitado no tiene fila en `users`.
+    """
+    __tablename__ = "game_notification_sends"
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(Integer, ForeignKey("game_players.id"), nullable=False)
+
+    category = Column(String(30), nullable=False)
+    variant_key = Column(String(50), nullable=False)
+    title = Column(String(200), nullable=False)
+    body = Column(String(500), nullable=False)
+
+    sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Lo que contestó el push service, reportado por el notifier después de
+    # intentar mandar. La fila se crea al elegir el copy —o sea antes del
+    # intento— así que sin esto un envío que nunca salió queda idéntico a uno
+    # exitoso. "ok" | "error_<status>" | "error". NULL = todavía sin reportar.
+    delivery_status = Column(String(20), nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    opened_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_game_notification_sends_player", "player_id"),
+        Index("idx_game_notification_sends_sent_at", "sent_at"),
+    )
 
 
 class Handle(Base):

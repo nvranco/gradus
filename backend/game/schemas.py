@@ -494,3 +494,35 @@ class GameCtaRequest(BaseModel):
     # documentado como "nunca falla por contenido". Sin el tope, un valor grande
     # lo hacía fallar con un 500 en el commit.
     solved: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+
+
+# ── Avisos push ──────────────────────────────────────────────────────────────
+# Espejo de los de Intervalo (main.py), y no importados de allá porque el router
+# del juego no puede importar main sin cerrar un ciclo. La forma es la misma
+# porque el cliente es el mismo: `PushSubscription.toJSON()` del navegador.
+
+
+class GamePushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class GamePushSubscribeRequest(BaseModel):
+    endpoint: str
+    keys: GamePushKeys
+
+
+class GamePushUnsubscribeRequest(BaseModel):
+    endpoint: str
+
+
+class GameNotificationSettings(BaseModel):
+    enabled: bool
+    time: Optional[str] = None      # "HH:MM", pasos de 15 minutos
+    timezone: Optional[str] = None  # nombre IANA
+
+
+class GameNotificationSettingsRequest(BaseModel):
+    enabled: bool
+    time: Optional[str] = None
+    timezone: Optional[str] = None

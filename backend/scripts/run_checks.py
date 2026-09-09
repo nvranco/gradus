@@ -51,6 +51,7 @@ CHECKS = [
     "check_aforo",
     "check_alias_vocabulario",
     "check_avisos_de_evento",
+    "check_avisos_del_juego",
     "check_cafecito_email",
     "check_cafecito_stream",
     "check_concurrencia",
